@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -11,11 +12,14 @@ model User {
   nama          String   @db.VarChar(100)
   email         String   @unique @db.VarChar(150)
   no_telp       String?  @db.VarChar(20)
+  alamat        String?  @db.Text
+  nama_toko     String?  @db.VarChar(100)
   password_hash String   @db.VarChar(255)
   role          String   @db.VarChar(10)
   poin          Int?
   badge         String?  @db.VarChar(100)
   carbon_score  Float?
+  foto          String?  @db.VarChar(255)
   created_at    DateTime @default(now())
 
   // Relations
@@ -39,7 +43,7 @@ model Makanan {
   harga_asli     Decimal  @db.Decimal(10, 2)
   harga_platform Decimal  @db.Decimal(10, 2)
   jalur          String   @db.VarChar(1)
-  tgl_expired    DateTime @db.Date
+  tgl_expired    DateTime
   stok           Int
   status         String   @db.VarChar(30)
   created_at     DateTime @default(now())
@@ -72,12 +76,13 @@ model Transaksi {
 }
 
 model Pembayaran {
-  id           Int      @id @default(autoincrement())
-  transaksi_id Int
-  metode       String   @db.VarChar(20)
-  jumlah       Decimal  @db.Decimal(10, 2)
-  status       String   @db.VarChar(10)
-  created_at   DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  transaksi_id   Int
+  metode         String   @db.VarChar(20)
+  jumlah         Decimal  @db.Decimal(10, 2)
+  bukti_transfer String?  @db.VarChar(255)
+  status         String   @db.VarChar(10)
+  created_at     DateTime @default(now())
 
   // Relations
   transaksi Transaksi @relation(fields: [transaksi_id], references: [id])
