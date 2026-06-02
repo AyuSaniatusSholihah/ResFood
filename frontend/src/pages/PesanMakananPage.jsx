@@ -8,7 +8,7 @@ export default function PesanMakananPage() {
   const { makananId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +172,27 @@ export default function PesanMakananPage() {
           </div>
 
           {!orderCreated ? (
+            // Jika user adalah penyedia produk, jangan tampilkan form pemesanan
+            item.penyedia && user && item.penyedia.id === user.id ? (
+              <div className="text-center py-6 space-y-4">
+                <h3 className="font-extrabold text-gray-800 text-lg">Pemilik Produk</h3>
+                <p className="text-xs text-gray-500 mt-1">Anda adalah penyedia makanan ini, tidak bisa melakukan pemesanan terhadap produk sendiri.</p>
+                <div className="pt-4 flex flex-col gap-2">
+                  <Link
+                    to="/makanan/tambah"
+                    className="w-full rounded-xl bg-[#1D9E75] p-3 text-center text-xs font-bold text-white hover:bg-[#16805E] transition-all"
+                  >
+                    Kelola Produk
+                  </Link>
+                  <Link
+                    to="/katalog"
+                    className="w-full rounded-xl bg-gray-50 border border-gray-200 p-3 text-center text-xs font-bold text-gray-600 hover:bg-gray-100 transition-all"
+                  >
+                    Kembali ke Katalog
+                  </Link>
+                </div>
+              </div>
+            ) : (
             /* STEP 1: Buat Pesanan */
             <form onSubmit={handleCreateOrder} className="space-y-4">
               <div>
@@ -216,6 +237,7 @@ export default function PesanMakananPage() {
                 {submitting ? 'Memproses...' : 'Buat Pesanan'}
               </button>
             </form>
+            )
           ) : !uploaded ? (
             /* STEP 2: Unggah Bukti Transfer */
             <div className="space-y-6">
