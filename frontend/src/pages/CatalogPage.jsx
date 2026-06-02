@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import MobileNav from '../components/MobileNav';
+import { useAuth } from '../context/AuthContext';
 
 export default function CatalogPage() {
   const [makananList, setMakananList] = useState([]);
@@ -70,6 +71,8 @@ export default function CatalogPage() {
         return `Jalur ${jalur}`;
     }
   };
+
+  const { user } = useAuth();
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 font-sans">
@@ -172,12 +175,21 @@ export default function CatalogPage() {
                       {/* Stock & Action Link */}
                       <div className="flex items-center justify-between border-t border-gray-50 pt-1.5">
                         <span className="text-[8px] md:text-[10px] text-gray-400 font-medium">Stok: {item.stok}</span>
-                        <Link
-                          to={`/makanan/${item.id}`}
-                          className="text-[10px] md:text-xs font-bold text-[#1D9E75] hover:underline"
-                        >
-                          Detail →
-                        </Link>
+                        {item.penyedia && user && item.penyedia.id === user.id ? (
+                          <Link
+                            to={`/edit-produk/${item.id}`}
+                            className="text-[10px] md:text-xs font-bold text-[#1D9E75] hover:underline"
+                          >
+                            Kelola →
+                          </Link>
+                        ) : (
+                          <Link
+                            to={`/makanan/${item.id}`}
+                            className="text-[10px] md:text-xs font-bold text-[#1D9E75] hover:underline"
+                          >
+                            Detail →
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
