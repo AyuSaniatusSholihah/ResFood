@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 import MobileNav from '../components/MobileNav';
 
 export default function ImpactPage() {
@@ -222,10 +221,6 @@ export default function ImpactPage() {
         </section>
       </main>
 
-      {/* Footer */}
-      <Footer />
-
-      {/* Floating Action Button - Active only on Home/Impact */}
       <Link to="/upload" className="fixed bottom-24 right-6 md:bottom-12 md:right-12 bg-tertiary text-on-tertiary w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform z-40">
         <span className="material-symbols-outlined">add</span>
       </Link>

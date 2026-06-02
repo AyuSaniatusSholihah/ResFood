@@ -1,35 +1,165 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 import MobileNav from '../components/MobileNav';
+import OnboardingFlowModal from '../components/OnboardingFlowModal';
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const { addToCart, getCartCount } = useCart();
-  const [activeTab, setActiveTab] = useState('edible'); // 'edible' or 'inedible'
-  const [makananTerbaru, setMakananTerbaru] = useState([]);
-  
+  const { addToCart } = useCart();
+  const [makananList, setMakananList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('A'); // 'A' | 'B' | 'C'
+  const [currentUser, setCurrentUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [showTourModal, setShowTourModal] = useState(false);
+  const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingError, setOnboardingError] = useState('');
+
+  // Countdown timer (demo)
+  const [timeLeft, setTimeLeft] = useState(54 * 60 + 12);
   useEffect(() => {
-    fetch('/api/makanan/terbaru')
-      .then(res => res.json())
-      .then(data => setMakananTerbaru(data))
-      .catch(err => console.error(err));
+    const t = setInterval(() => setTimeLeft(p => p > 0 ? p - 1 : 59 * 60 + 59), 1000);
+    return () => clearInterval(t);
   }, []);
-  
-  // Timer state
-  const [timeLeft, setTimeLeft] = useState(54 * 60 + 12); // 54 minutes 12 seconds in seconds
+  const mm = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const ss = (timeLeft % 60).toString().padStart(2, '0');
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev > 0) return prev - 1;
-        return 59 * 60 + 59; // loop back to 59:59 if it hits 0 for demo purposes
-      });
-    }, 1000);
-    return () => clearInterval(timer);
+    const u = localStorage.getItem('user');
+    if (u) { try { setCurrentUser(JSON.parse(u)); } catch {} }
   }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    fetch('/api/user/profile', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Gagal memuat profil');
+        return res.json();
+      })
+      .then((data) => {
+        const nextProfile = {
+          ...data,
+          onboarding_prompt_seen: data.onboarding_prompt_seen ? true : false
+        };
+
+        setProfile(nextProfile);
+        setCurrentUser(nextProfile);
+        localStorage.setItem('user', JSON.stringify(nextProfile));
+
+        if (nextProfile.onboarding_prompt_seen) {
+          return;
+        }
+
+        // Tandai sebagai sudah pernah ditampilkan sejak pertama kali popup muncul.
+        setProfile((prev) => prev ? { ...prev, onboarding_prompt_seen: true } : prev);
+        setCurrentUser((prev) => prev ? { ...prev, onboarding_prompt_seen: true } : prev);
+        localStorage.setItem('user', JSON.stringify({ ...nextProfile, onboarding_prompt_seen: true }));
+        updateProfile({ onboarding_prompt_seen: true }).catch(() => {
+          // Abaikan agar popup tetap tidak mengganggu sesi berjalan.
+        });
+
+        const butuhAlamat = !nextProfile.kecamatan;
+        const butuhTour = !nextProfile.onboarding_tour_seen;
+        if (butuhAlamat) {
+          setShowAddressModal(true);
+          return;
+        }
+        if (butuhTour) {
+          setShowTourModal(true);
+        }
+      })
+      .catch(() => {
+        // Biar tidak mengganggu dashboard jika API profil gagal.
+      });
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/makanan')
+      .then(r => r.json())
+      .then(data => { setMakananList(Array.isArray(data) ? data : []); })
+      .catch(() => setMakananList([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = makananList.filter(m => m.jalur === activeTab);
+
+  const updateProfile = async (payload) => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    const response = await fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Gagal menyimpan data profil');
+    }
+
+    setProfile(data.user);
+    setCurrentUser(data.user);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    return data.user;
+  };
+
+  const handleSaveAddress = async (payload) => {
+    setOnboardingSaving(true);
+    setOnboardingError('');
+    try {
+      const updated = await updateProfile(payload);
+      setShowAddressModal(false);
+      if (!updated?.onboarding_tour_seen) {
+        setShowTourModal(true);
+        return;
+      }
+
+      await updateProfile({ onboarding_prompt_seen: true });
+    } catch (error) {
+      setOnboardingError(error.message || 'Gagal menyimpan alamat');
+    } finally {
+      setOnboardingSaving(false);
+    }
+  };
+
+  const handleSkipAddress = async () => {
+    setOnboardingError('');
+    setShowAddressModal(false);
+    if (!profile?.onboarding_tour_seen) {
+      setShowTourModal(true);
+      return;
+    }
+
+    try {
+      await updateProfile({ onboarding_prompt_seen: true });
+    } catch (error) {
+      setOnboardingError(error.message || 'Gagal menyimpan status popup');
+    }
+  };
+
+  const handleFinishTour = async () => {
+    setOnboardingSaving(true);
+    setOnboardingError('');
+    try {
+      await updateProfile({ onboarding_tour_seen: true, onboarding_prompt_seen: true });
+      setShowTourModal(false);
+    } catch (error) {
+      setOnboardingError(error.message || 'Gagal menyimpan status panduan');
+    } finally {
+      setOnboardingSaving(false);
+    }
+  };
 
   const handleAddToCart = (item, e) => {
     e.preventDefault();
@@ -37,295 +167,336 @@ export default function DashboardPage() {
     addToCart({
       id: item.id,
       name: item.nama,
-      seller: item.penyedia?.nama_toko || item.penyedia?.nama || 'Solo',
-      price: item.harga_platform,
+      seller: item.penyedia?.nama || 'TurahanSolo',
+      price: item.hargaPlatform ?? item.harga_platform ?? 0,
       image: item.foto || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
       quantity: 1
     });
-    alert('Berhasil ditambahkan ke keranjang!');
+    alert('Ditambahkan ke keranjang!');
   };
 
-  const handleClaimNow = (item, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    addToCart({
-      id: item.id,
-      name: item.nama,
-      seller: item.penyedia?.nama_toko || item.penyedia?.nama || 'Solo',
-      price: item.harga_platform,
-      image: item.foto || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
-      quantity: 1
+  const jalurConfig = {
+    A: { label: 'Jalur A', sub: 'Layak Konsumsi', color: '#1D9E75', bg: '#F0FDF9', border: '#A7F3D0', icon: 'restaurant' },
+    B: { label: 'Jalur B', sub: 'Pakan Hewan', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', icon: 'pets' },
+    C: { label: 'Jalur C', sub: 'Daur Ulang', color: '#7C3AED', bg: '#FAF5FF', border: '#DDD6FE', icon: 'recycling' },
+  };
+
+  const formatPrice = (v) => {
+    if (!v || v === 0) return 'Gratis';
+    return 'Rp ' + Number(v).toLocaleString('id-ID');
+  };
+
+  const formatExpiry = (tgl) => {
+    if (!tgl) return null;
+    return new Date(tgl).toLocaleString('id-ID', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     });
-    navigate('/cart');
   };
-
-  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-  const seconds = (timeLeft % 60).toString().padStart(2, '0');
 
   return (
-    <div className="bg-surface text-on-surface">
-      {/* TopAppBar */}
+    <div className="min-h-screen font-sans" style={{ background: '#F8FAF9' }}>
       <Header />
 
-      <main className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-lg pb-32">
-        {/* Purpose Filter Chips */}
-        <section className="mb-xl overflow-x-auto hide-scrollbar">
-          <div className="flex gap-sm whitespace-nowrap pb-xs">
-            {['Layak Konsumsi', 'Sudah Basi'].map(chip => {
-              const isEdible = chip === 'Layak Konsumsi';
-              const isActive = (activeTab === 'edible' && isEdible) || (activeTab === 'inedible' && !isEdible);
-              return (
-                <button 
-                  key={chip}
-                  onClick={() => setActiveTab(isEdible ? 'edible' : 'inedible')}
-                  className={`px-lg py-sm rounded-full font-label-md text-label-md transition-colors ${
-                    isActive 
-                      ? isEdible ? 'bg-primary-container text-on-primary-container shadow-sm border border-primary' : 'bg-tertiary-container text-on-tertiary-container shadow-sm border border-tertiary'
-                      : 'bg-surface-container-highest text-on-surface-variant hover:bg-tertiary-fixed-dim'
-                  }`}
-                >
-                  {chip}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+      <main className="pb-28 max-w-md mx-auto md:max-w-4xl">
 
-        {activeTab === 'edible' ? (
-          <>
-            {/* Emergency Food Banner */}
-            <section className="mb-xl">
-              <div className="relative overflow-hidden rounded-xl bg-error-container p-lg flex flex-col md:flex-row items-center gap-lg border border-error">
-                <div className="absolute -right-10 -top-10 opacity-10">
-                  <span className="material-symbols-outlined text-[200px]" style={{fontVariationSettings: "'FILL' 1"}}>warning</span>
-                </div>
-                <div className="flex-1 relative z-10">
-                  <div className="flex items-center gap-sm mb-xs">
-                    <span className="material-symbols-outlined text-error" style={{fontVariationSettings: "'FILL' 1"}}>timer</span>
-                    <h3 className="font-headline-md text-[16px] md:text-headline-md text-on-error-container">Emergency Surplus!</h3>
-                  </div>
-                  <p className="font-body-md text-body-md text-on-error-container opacity-90">Bantu selamatkan makanan ini sebelum berakhir di TPA dalam kurun waktu kurang dari 2 jam.</p>
-                </div>
-                <div className="flex items-center gap-md relative z-10">
-                  <div className="bg-surface p-md rounded-lg text-center min-w-[70px] shadow-sm">
-                    <span className="block font-headline-md text-[16px] md:text-headline-md text-error">{minutes}</span>
-                    <span className="text-label-sm font-label-sm text-on-surface-variant">MENIT</span>
-                  </div>
-                  <div className="bg-surface p-md rounded-lg text-center min-w-[70px] shadow-sm">
-                    <span className="block font-headline-md text-[16px] md:text-headline-md text-error">{seconds}</span>
-                    <span className="text-label-sm font-label-sm text-on-surface-variant">DETIK</span>
-                  </div>
-                  <Link to="/cart" className="bg-error text-on-error px-xl py-md rounded-xl font-label-lg text-label-lg shadow-md hover:scale-105 transition-transform flex items-center justify-center">Ambil Sekarang</Link>
-                </div>
-              </div>
-            </section>
+        {/* ── HERO GREETING ── */}
+        <div
+          className="px-5 pt-5 pb-6 relative overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #0D7A59 100%)' }}
+        >
+          {/* Decorative blob */}
+          <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full opacity-10 bg-white" />
+          <div className="absolute right-8 bottom-0 w-20 h-20 rounded-full opacity-10 bg-white" />
 
-            {/* Flash Sale Horizontal Scroll */}
-            <section className="mb-xl">
-              <div className="flex justify-between items-end mb-md">
+          <p className="text-white/70 text-xs font-medium mb-0.5">
+            Selamat datang{currentUser?.nama ? ',' : ''}
+          </p>
+          <h1 className="text-white text-xl font-black leading-tight mb-1">
+            {currentUser?.nama || 'Sobat TurahanSolo'} 👋
+          </h1>
+          <p className="text-white/80 text-[11px] leading-relaxed mb-5">
+            Ada makanan surplus yang perlu diselamatkan hari ini.
+          </p>
+
+          {/* Stats row */}
+          <div className="flex gap-3">
+            {[
+              { icon: 'eco', label: 'Tersedia', value: makananList.length + ' Item' },
+              { icon: 'schedule', label: 'Flash Sale', value: mm + ':' + ss },
+            ].map((s, i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-2xl px-3 py-2.5 flex items-center gap-2"
+                style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}
+              >
+                <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  {s.icon}
+                </span>
                 <div>
-                  <h2 className="font-headline-lg text-headline-lg text-on-surface">Flash Sale Surplus</h2>
-                  <p className="font-body-md text-body-md text-on-surface-variant">Diskon hingga 80% untuk penyelamatan cepat.</p>
+                  <p className="text-white/70 text-[9px] font-medium leading-none">{s.label}</p>
+                  <p className="text-white text-[13px] font-black leading-tight">{s.value}</p>
                 </div>
-                <button className="text-primary font-label-lg text-label-lg hover:underline">Lihat Semua</button>
               </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 md:gap-lg">
-                {makananTerbaru.length > 0 ? makananTerbaru.map((item) => (
-                  <Link to={`/detail/${item.id}`} key={item.id} className="bg-surface rounded-xl shadow-sm border border-outline-variant overflow-hidden hover:shadow-lg transition-shadow flex flex-col h-full">
-                    <div className="relative h-28 md:h-40">
-                      <img alt={item.nama} className="w-full h-full object-cover" src={item.foto || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80'}/>
-                      <div className="absolute top-sm left-sm bg-error text-on-error text-label-sm font-label-sm px-sm py-xs rounded-lg">-70%</div>
-                    </div>
-                    <div className="p-3 md:p-md flex-1 flex flex-col">
-                      <h4 className="font-headline-sm text-[14px] md:text-headline-sm leading-tight mb-xs line-clamp-1">{item.nama}</h4>
-                      <div className="flex flex-col gap-1 text-on-surface-variant mb-2">
-                        <div className="flex items-center gap-xs">
-                          <span className="material-symbols-outlined text-[16px]">store</span>
-                          <span className="text-label-sm font-label-sm line-clamp-1 font-semibold">{item.penyedia?.nama_toko || item.penyedia?.nama || 'Solo'}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-xs mt-0.5">
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-xs text-[12px] opacity-75">
-                              <span className="material-symbols-outlined text-[14px]">location_on</span>
-                              <span>Solo</span>
-                            </div>
-                            {item.tgl_expired && (
-                              <div className="flex items-center gap-xs text-[11px] text-error font-semibold mt-1">
-                                <span className="material-symbols-outlined text-[13px]">schedule</span>
-                                <span>Batas: {new Date(item.tgl_expired).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}, {new Date(item.tgl_expired).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            )}
-                          </div>
-                          {item.penyedia?.no_telp && (
-                            <a 
-                              href={`https://wa.me/${item.penyedia.no_telp.replace(/\+/g, '')}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-xs text-[11px] text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded-full border border-green-200/50 hover:bg-green-100 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-[12px] text-green-500">chat</span>
-                              WA
-                            </a>
-                          )}
-                        </div>
-                      </div>
+            ))}
 
-                      <div className="flex justify-between items-center mt-2 mb-3">
-                        <div className="flex flex-col gap-0.5">
-                          {item.harga_asli > 0 && (
-                            <span className="text-[11px] line-through text-on-surface-variant opacity-60 leading-none">Rp {item.harga_asli}</span>
-                          )}
-                          <p className="text-primary font-headline-md text-[16px] md:text-headline-md font-bold leading-none mt-0.5">Rp {item.harga_platform}</p>
-                        </div>
-                        <span className="text-label-sm font-label-sm bg-secondary-container text-on-secondary-container px-sm py-xs rounded whitespace-nowrap">Sisa {item.stok}</span>
-                      </div>
-                      
-                      <div className="flex gap-2 mt-auto pt-3 border-t border-outline-variant/30">
-                        <button 
-                          onClick={(e) => handleAddToCart(item, e)}
-                          className="p-2 bg-surface-container hover:bg-surface-container-high rounded-lg text-on-surface flex items-center justify-center transition-colors"
-                          title="Tambah ke Keranjang"
-                        >
-                          <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
-                        </button>
-                        <button 
-                          onClick={(e) => handleClaimNow(item, e)}
-                          className="flex-1 bg-primary text-on-primary py-2 px-3 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all text-center"
-                        >
-                          Ambil Sekarang
-                        </button>
-                      </div>
-                    </div>
-                  </Link>
-                )) : (
-                  <p className="text-on-surface-variant p-4">Memuat data dari database...</p>
-                )}
+            <Link
+              to="/upload"
+              className="flex-1 rounded-2xl px-3 py-2.5 flex items-center gap-2 active:scale-95 transition-transform"
+              style={{ background: 'rgba(255,255,255,0.95)' }}
+            >
+              <span className="material-symbols-outlined text-[20px]" style={{ color: '#1D9E75', fontVariationSettings: "'FILL' 1" }}>
+                add_circle
+              </span>
+              <div>
+                <p className="text-gray-400 text-[9px] font-medium leading-none">Bagikan</p>
+                <p className="text-[13px] font-black leading-tight" style={{ color: '#1D9E75' }}>Makanan</p>
               </div>
-            </section>
- 
-            {/* Grid of "Layak Konsumsi" food cards */}
-            <section>
-              <h2 className="font-headline-lg text-headline-lg text-on-surface mb-md">Katalog Surplus Terdekat</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-lg">
-                {makananTerbaru.length > 0 ? makananTerbaru.map((item) => (
-                  <Link to={`/detail/${item.id}`} key={'dekat-' + item.id} className="bg-surface rounded-xl shadow-sm border border-outline-variant overflow-hidden hover:shadow-md transition-shadow flex flex-col h-full">
-                    <div className="relative h-32 md:h-48">
-                      <img alt={item.nama} className="w-full h-full object-cover" src={item.foto || 'https://images.unsplash.com/photo-1590432244458-18e38d721bb8?auto=format&fit=crop&w=400&q=80'}/>
-                      <span className="absolute top-sm right-sm bg-primary-container text-on-primary-container text-label-sm font-label-sm px-md py-xs rounded-full whitespace-nowrap overflow-hidden text-ellipsis max-w-[80%]">Layak Konsumsi</span>
-                    </div>
-                    <div className="p-3 md:p-md flex-1 flex flex-col">
-                      <h4 className="font-headline-sm text-[14px] md:text-headline-sm leading-tight mb-xs line-clamp-1">{item.nama}</h4>
-                      <div className="flex flex-col gap-1 text-on-surface-variant mb-2">
-                        <div className="flex items-center gap-xs">
-                          <span className="material-symbols-outlined text-[16px]">store</span>
-                          <span className="text-label-sm font-label-sm line-clamp-1 font-semibold">{item.penyedia?.nama_toko || item.penyedia?.nama || 'Solo'}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-xs mt-0.5">
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-xs text-[12px] opacity-75">
-                              <span className="material-symbols-outlined text-[14px]">location_on</span>
-                              <span>Solo • 1.2km</span>
-                            </div>
-                            {item.tgl_expired && (
-                              <div className="flex items-center gap-xs text-[11px] text-error font-semibold mt-1">
-                                <span className="material-symbols-outlined text-[13px]">schedule</span>
-                                <span>Batas: {new Date(item.tgl_expired).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}, {new Date(item.tgl_expired).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            )}
-                          </div>
-                          {item.penyedia?.no_telp && (
-                            <a 
-                              href={`https://wa.me/${item.penyedia.no_telp.replace(/\+/g, '')}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-xs text-[11px] text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded-full border border-green-200/50 hover:bg-green-100 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-[12px] text-green-500">chat</span>
-                              WA
-                            </a>
-                          )}
-                        </div>
-                      </div>
+            </Link>
+          </div>
+        </div>
 
-                      <div className="flex justify-between items-center mt-2 mb-3">
-                        <div className="flex flex-col gap-0.5">
-                          {item.harga_asli > 0 && (
-                            <span className="text-[11px] line-through text-on-surface-variant opacity-60 leading-none">Rp {item.harga_asli}</span>
-                          )}
-                          <p className="text-primary font-headline-md text-[16px] md:text-headline-md font-bold leading-none mt-0.5">Rp {item.harga_platform}</p>
-                        </div>
-                        <span className="text-label-sm font-label-sm bg-secondary-container text-on-secondary-container px-sm py-xs rounded whitespace-nowrap">Sisa {item.stok}</span>
-                      </div>
-                      
-                      <div className="flex gap-2 mt-auto pt-3 border-t border-outline-variant/30">
-                        <button 
-                          onClick={(e) => handleAddToCart(item, e)}
-                          className="p-2 bg-surface-container hover:bg-surface-container-high rounded-lg text-on-surface flex items-center justify-center transition-colors"
-                          title="Tambah ke Keranjang"
-                        >
-                          <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
-                        </button>
-                        <button 
-                          onClick={(e) => handleClaimNow(item, e)}
-                          className="flex-1 bg-primary text-on-primary py-2 px-3 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all text-center"
-                        >
-                          Ambil Sekarang
-                        </button>
-                      </div>
-                    </div>
-                  </Link>
-                )) : (
-                  <p className="text-on-surface-variant p-4">Memuat data...</p>
-                )}
+        {/* ── QUICK ACCESS ICONS ── */}
+        <div className="px-4 py-4 grid grid-cols-4 gap-3">
+          {[
+            { to: '/katalog', icon: 'storefront', label: 'Katalog', color: '#1D9E75' },
+            { to: '/riwayat', icon: 'receipt_long', label: 'Riwayat', color: '#2563EB' },
+            { to: '/dampak', icon: 'bar_chart', label: 'Dampak', color: '#7C3AED' },
+            { to: '/notifikasi', icon: 'notifications_active', label: 'Notif', color: '#D97706' },
+          ].map((q) => (
+            <Link key={q.to} to={q.to} className="flex flex-col items-center gap-1.5 group">
+              <div
+                className="w-13 h-13 w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform active:scale-90"
+                style={{ background: q.color + '18' }}
+              >
+                <span
+                  className="material-symbols-outlined text-[22px]"
+                  style={{ color: q.color, fontVariationSettings: "'FILL' 1" }}
+                >
+                  {q.icon}
+                </span>
               </div>
-            </section>
-          </>
-        ) : (
-          <section>
-            <h2 className="font-headline-lg text-headline-lg text-on-surface mb-md">Katalog Untuk Riset & Kompos</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-lg">
-              <div className="bg-surface rounded-xl shadow-sm border border-outline-variant overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="relative h-32 md:h-48">
-                      <img src="https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&w=400&q=80" alt="Spoiled Fruit" className="w-full h-full object-cover grayscale" />
-                      <span className="absolute top-sm right-sm bg-[#D7CCC8] text-[#795548] text-label-sm font-label-sm px-md py-xs rounded-full">Sudah Basi</span>
-                  </div>
-                  <div className="p-3 md:p-md">
-                      <h4 className="font-headline-sm text-[14px] md:text-headline-sm leading-tight mb-xs">Limbah Kulit Buah</h4>
-                      <div className="flex gap-xs mb-md">
-                          <span className="px-md py-xs bg-[#D7CCC8] text-[#795548] rounded-full text-[10px] font-bold">Research</span>
-                          <span className="px-md py-xs bg-[#D7CCC8] text-[#795548] rounded-full text-[10px] font-bold">Fertilizer</span>
-                      </div>
-                      <p className="text-label-sm font-label-sm text-on-surface-variant mb-md">Banjarsari • 25kg Tersedia</p>
-                      <button className="w-full bg-tertiary text-on-tertiary py-md rounded-xl font-label-lg hover:opacity-90 transition-opacity">Ambil Untuk Riset</button>
-                  </div>
-              </div>
-              <div className="bg-surface rounded-xl shadow-sm border border-outline-variant overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="relative h-32 md:h-48">
-                      <img src="https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&w=400&q=80" alt="Coffee Grounds" className="w-full h-full object-cover grayscale" />
-                      <span className="absolute top-sm right-sm bg-[#D7CCC8] text-[#795548] text-label-sm font-label-sm px-md py-xs rounded-full">Sudah Basi</span>
-                  </div>
-                  <div className="p-3 md:p-md">
-                      <h4 className="font-headline-sm text-[14px] md:text-headline-sm leading-tight mb-xs">Ampas Kopi Murni</h4>
-                      <div className="flex gap-xs mb-md">
-                          <span className="px-md py-xs bg-[#D7CCC8] text-[#795548] rounded-full text-[10px] font-bold">Fertilizer</span>
-                          <span className="px-md py-xs bg-[#D7CCC8] text-[#795548] rounded-full text-[10px] font-bold">Biogas</span>
-                      </div>
-                      <p className="text-label-sm font-label-sm text-on-surface-variant mb-md">Laweyan • 5kg Harian</p>
-                      <button className="w-full bg-tertiary text-on-tertiary py-md rounded-xl font-label-lg hover:opacity-90 transition-opacity">Ambil Untuk Pupuk</button>
-                  </div>
-              </div>
+              <span className="text-[10px] font-semibold text-gray-500">{q.label}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* ── FLASH SALE BANNER ── */}
+        <div className="px-4 mb-4">
+          <div
+            className="rounded-3xl p-4 flex items-center gap-4 relative overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #FEF3C7, #FDE68A)' }}
+          >
+            <div className="absolute -right-4 -bottom-4 opacity-20">
+              <span className="material-symbols-outlined text-[80px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+                local_fire_department
+              </span>
             </div>
-          </section>
-        )}
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B' }}>
+              <span className="material-symbols-outlined text-white text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                flash_on
+              </span>
+            </div>
+            <div className="flex-1 min-w-0 relative z-10">
+              <p className="text-xs font-black text-amber-900">⚡ Flash Sale Surplus!</p>
+              <p className="text-[10px] text-amber-700 mt-0.5">Diskon hingga 80% — berakhir dalam</p>
+              <p className="text-lg font-black text-amber-900 tracking-widest mt-0.5">{mm}<span className="text-amber-600 animate-pulse">:</span>{ss}</p>
+            </div>
+            <Link
+              to="/flash-sale"
+              className="flex-shrink-0 rounded-xl px-3 py-2 text-[11px] font-black text-white shadow active:scale-95 transition-transform relative z-10"
+              style={{ background: '#F59E0B' }}
+            >
+              Lihat
+            </Link>
+          </div>
+        </div>
+
+        {/* ── JALUR TABS ── */}
+        <div className="px-4 mb-4">
+          <div className="flex gap-2 p-1 rounded-2xl" style={{ background: '#EEF2EE' }}>
+            {Object.entries(jalurConfig).map(([key, cfg]) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className="flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all duration-200 active:scale-95"
+                style={activeTab === key ? {
+                  background: '#fff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+                } : {}}
+              >
+                <span
+                  className="material-symbols-outlined text-[18px] mb-0.5"
+                  style={{
+                    color: activeTab === key ? cfg.color : '#9CA3AF',
+                    fontVariationSettings: activeTab === key ? "'FILL' 1" : "'FILL' 0",
+                  }}
+                >
+                  {cfg.icon}
+                </span>
+                <span
+                  className="text-[10px] font-black"
+                  style={{ color: activeTab === key ? cfg.color : '#9CA3AF' }}
+                >
+                  {cfg.label}
+                </span>
+                <span
+                  className="text-[8px] font-medium"
+                  style={{ color: activeTab === key ? cfg.color + 'CC' : '#C4C4C4' }}
+                >
+                  {cfg.sub}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── FOOD LIST ── */}
+        <div className="px-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-black text-gray-800">{jalurConfig[activeTab].label} — {jalurConfig[activeTab].sub}</h2>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {filtered.length > 0 ? `${filtered.length} item tersedia` : 'Tidak ada item'}
+              </p>
+            </div>
+            <Link
+              to="/katalog"
+              className="text-[11px] font-bold flex items-center gap-0.5"
+              style={{ color: '#1D9E75' }}
+            >
+              Lihat Semua
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-14">
+              <div className="w-8 h-8 rounded-full border-4 border-gray-100 border-t-[#1D9E75] animate-spin mb-3" />
+              <p className="text-xs text-gray-400">Memuat makanan...</p>
+            </div>
+          ) : filtered.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {filtered.map((item) => {
+                const price = item.hargaPlatform ?? item.harga_platform ?? 0;
+                const origPrice = item.hargaAsli ?? item.harga_asli ?? 0;
+                const hasDiscount = price < origPrice && origPrice > 0;
+                const cfg = jalurConfig[item.jalur] || jalurConfig['A'];
+                return (
+                  <Link
+                    key={item.id}
+                    to={`/makanan/${item.id}`}
+                    className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm border active:scale-95 transition-all duration-150"
+                    style={{ borderColor: '#F3F4F6' }}
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
+                      <img
+                        src={item.foto || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=400&q=80'}
+                        alt={item.nama}
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Jalur badge */}
+                      <span
+                        className="absolute top-2 left-2 text-[8px] font-black px-1.5 py-0.5 rounded-lg"
+                        style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}
+                      >
+                        {cfg.label}
+                      </span>
+                      {/* Discount badge */}
+                      {hasDiscount && (
+                        <span className="absolute top-2 right-2 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-lg">
+                          -{Math.round((1 - price / origPrice) * 100)}%
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-2.5 flex flex-col gap-1 flex-1">
+                      <p className="text-[9px] text-gray-400 font-medium truncate">
+                        {item.penyedia?.nama || 'TurahanSolo'}
+                      </p>
+                      <h3 className="text-xs font-bold text-gray-800 leading-tight line-clamp-2">
+                        {item.nama}
+                      </h3>
+
+                      {/* Expiry */}
+                      {(item.tglExpired || item.tgl_expired) && (
+                        <p className="text-[9px] font-semibold flex items-center gap-0.5" style={{ color: '#EF4444' }}>
+                          <span className="material-symbols-outlined text-[10px]">schedule</span>
+                          {formatExpiry(item.tglExpired || item.tgl_expired)}
+                        </p>
+                      )}
+
+                      {/* Price */}
+                      <div className="mt-auto pt-2">
+                        {hasDiscount && (
+                          <p className="text-[9px] text-gray-400 line-through leading-none">
+                            Rp {Number(origPrice).toLocaleString('id-ID')}
+                          </p>
+                        )}
+                        <p
+                          className="text-sm font-black leading-tight"
+                          style={{ color: price === 0 ? '#1D9E75' : '#1A1A1A' }}
+                        >
+                          {formatPrice(price)}
+                        </p>
+                      </div>
+
+                      {/* Action */}
+                      <button
+                        onClick={(e) => handleAddToCart(item, e)}
+                        className="mt-2 w-full py-2 rounded-xl text-[10px] font-black text-white transition-all active:scale-95"
+                        style={{ background: `linear-gradient(135deg, ${cfg.color}, ${cfg.color}CC)` }}
+                      >
+                        + Keranjang
+                      </button>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-14 text-center">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+                style={{ background: jalurConfig[activeTab].bg }}
+              >
+                <span
+                  className="material-symbols-outlined text-[32px]"
+                  style={{ color: jalurConfig[activeTab].color, fontVariationSettings: "'FILL' 1" }}
+                >
+                  {jalurConfig[activeTab].icon}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-gray-700">Belum Ada Item</h3>
+              <p className="text-[11px] text-gray-400 mt-1 max-w-[200px]">
+                Belum ada makanan {jalurConfig[activeTab].sub} saat ini.
+              </p>
+              <Link
+                to="/upload"
+                className="mt-4 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow"
+                style={{ background: '#1D9E75' }}
+              >
+                Bagikan Makanan
+              </Link>
+            </div>
+          )}
+        </div>
+
       </main>
 
-      {/* BottomNavBar (Mobile Only) */}
       <MobileNav />
 
-      {/* Footer */}
-      <Footer />
+      <OnboardingFlowModal
+        isOpen={showAddressModal || showTourModal}
+        mode={showAddressModal ? 'address' : 'tour'}
+        profile={profile}
+        saving={onboardingSaving}
+        error={onboardingError}
+        onSaveAddress={handleSaveAddress}
+        onSkipAddress={handleSkipAddress}
+        onFinishTour={handleFinishTour}
+      />
     </div>
   );
 }

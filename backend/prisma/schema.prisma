@@ -7,158 +7,94 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Jalur {
+  A
+  B
+  C
+}
+
+enum MakananStatus {
+  AKTIF
+  SELESAI
+  DIHAPUS
+}
+
+enum TransaksiTipe {
+  KONSUMSI
+  DAUR_ULANG
+}
+
+enum TransaksiStatus {
+  MENUNGGU
+  AKTIF
+  SELESAI
+  DIBATALKAN
+}
+
 model User {
-  id            Int      @id @default(autoincrement())
-  nama          String   @db.VarChar(100)
-  email         String   @unique @db.VarChar(150)
-  no_telp       String?  @db.VarChar(20)
-  alamat        String?  @db.Text
-  nama_toko     String?  @db.VarChar(100)
-  password_hash String   @db.VarChar(255)
-  role          String   @db.VarChar(10)
-  poin          Int?
-  badge         String?  @db.VarChar(100)
-  carbon_score  Float?
-  foto          String?  @db.VarChar(255)
-  created_at    DateTime @default(now())
+  id        Int         @id @default(autoincrement())
+  nama      String      @db.VarChar(100)
+  email     String      @unique @db.VarChar(150)
+  password  String      @db.VarChar(255)
+  role      Role
+  isActive  Boolean     @default(true)
+  noTelp    String?     @map("no_telp") @db.VarChar(25)
+  kecamatan String?     @db.VarChar(100)
+  alamatDetail String?  @map("alamat_detail") @db.VarChar(255)
+  namaToko  String?     @map("nama_toko") @db.VarChar(120)
+  foto      String?     @db.VarChar(255)
+  onboardingTourSeen Boolean @default(false) @map("onboarding_tour_seen")
+  onboardingPromptSeen Boolean @default(false) @map("onboarding_prompt_seen")
+  createdAt DateTime    @default(now())
 
   // Relations
-  makanan_disediakan Makanan[]      @relation("PenyediaMakanan")
-  transaksi_dipesan  Transaksi[]    @relation("PemesanTransaksi")
-  review_diberikan   ReviewRating[] @relation("PemesanReview")
-  review_diterima    ReviewRating[] @relation("PenyediaReview")
-  carbon_logs        CarbonLog[]
-  poin_rewards       PoinReward[]
-  notifikasi         Notifikasi[]
+  makanan   Makanan[]
+  transaksi Transaksi[]
 
   @@map("users")
 }
 
 model Makanan {
-  id             Int      @id @default(autoincrement())
-  penyedia_id    Int
-  nama           String   @db.VarChar(150)
-  deskripsi      String?  @db.Text
-  foto           String?  @db.VarChar(255)
-  harga_asli     Decimal  @db.Decimal(10, 2)
-  harga_platform Decimal  @db.Decimal(10, 2)
-  jalur          String   @db.VarChar(1)
-  tgl_expired    DateTime
+  id             Int           @id @default(autoincrement())
+  nama           String        @db.VarChar(150)
+  deskripsi      String        @db.Text
+  foto           String        @db.VarChar(255)
+  hargaAsli      Float
+  hargaPlatform  Float
+  jalur          Jalur
+  tglExpired     DateTime
   stok           Int
-  status         String   @db.VarChar(30)
-  created_at     DateTime @default(now())
+  status         MakananStatus
+  createdAt      DateTime      @default(now())
 
   // Relations
-  penyedia    User        @relation("PenyediaMakanan", fields: [penyedia_id], references: [id])
-  transaksi   Transaksi[]
-  carbon_logs CarbonLog[]
+  penyediaId     Int
+  penyedia       User          @relation(fields: [penyediaId], references: [id])
+  transaksi      Transaksi[]
 
   @@map("makanan")
 }
 
 model Transaksi {
-  id           Int      @id @default(autoincrement())
-  makanan_id   Int
-  pemesan_id   Int
-  tipe_pemesan String   @db.VarChar(15)
-  jumlah       Int
-  total_bayar  Decimal? @db.Decimal(10, 2)
-  status       String   @db.VarChar(20)
-  created_at   DateTime @default(now())
+  id         Int             @id @default(autoincrement())
+  jumlah     Int
+  totalBayar Float
+  tipe       TransaksiTipe
+  buktiBayar String?         @db.VarChar(255)
+  status     TransaksiStatus
+  metode     String          @default("QRIS") @db.VarChar(50)
+  createdAt  DateTime        @default(now())
 
   // Relations
-  makanan       Makanan        @relation(fields: [makanan_id], references: [id])
-  pemesan       User           @relation("PemesanTransaksi", fields: [pemesan_id], references: [id])
-  pembayaran    Pembayaran[]
-  review_rating ReviewRating[]
+  makananId  Int
+  makanan    Makanan         @relation(fields: [makananId], references: [id])
+  pemesanId  Int
+  pemesan    User            @relation(fields: [pemesanId], references: [id])
 
   @@map("transaksi")
-}
-
-model Pembayaran {
-  id             Int      @id @default(autoincrement())
-  transaksi_id   Int
-  metode         String   @db.VarChar(20)
-  jumlah         Decimal  @db.Decimal(10, 2)
-  bukti_transfer String?  @db.VarChar(255)
-  status         String   @db.VarChar(10)
-  created_at     DateTime @default(now())
-
-  // Relations
-  transaksi Transaksi @relation(fields: [transaksi_id], references: [id])
-
-  @@map("pembayaran")
-}
-
-model ReviewRating {
-  id           Int      @id @default(autoincrement())
-  transaksi_id Int
-  pemesan_id   Int
-  penyedia_id  Int
-  rating       Int
-  komentar     String?  @db.Text
-  created_at   DateTime @default(now())
-
-  // Relations
-  transaksi Transaksi @relation(fields: [transaksi_id], references: [id])
-  pemesan   User      @relation("PemesanReview", fields: [pemesan_id], references: [id])
-  penyedia  User      @relation("PenyediaReview", fields: [penyedia_id], references: [id])
-
-  @@map("review_rating")
-}
-
-model CarbonLog {
-  id               Int      @id @default(autoincrement())
-  user_id          Int
-  makanan_id       Int
-  kg_terselamatkan Float
-  co2_berkurang    Float
-  created_at       DateTime @default(now())
-
-  // Relations
-  user    User    @relation(fields: [user_id], references: [id])
-  makanan Makanan @relation(fields: [makanan_id], references: [id])
-
-  @@map("carbon_log")
-}
-
-model PoinReward {
-  id              Int      @id @default(autoincrement())
-  user_id         Int
-  jenis_aktivitas String   @db.VarChar(20)
-  poin_diperoleh  Int
-  keterangan      String?  @db.VarChar(255)
-  created_at      DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [user_id], references: [id])
-
-  @@map("poin_reward")
-}
-
-model Notifikasi {
-  id         Int      @id @default(autoincrement())
-  user_id    Int
-  judul      String   @db.VarChar(150)
-  pesan      String   @db.Text
-  is_read    Boolean? @default(false)
-  created_at DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [user_id], references: [id])
-
-  @@map("notifikasi")
-}
-
-model CommunityChallenge {
-  id          Int      @id @default(autoincrement())
-  judul       String   @db.VarChar(150)
-  deskripsi   String?  @db.Text
-  target_kg   Float
-  progress_kg Float?
-  tgl_mulai   DateTime @db.Date
-  tgl_selesai DateTime @db.Date
-  status      String   @db.VarChar(10)
-
-  @@map("community_challenge")
 }

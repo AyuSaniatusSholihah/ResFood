@@ -12,6 +12,7 @@ export default function EditProductPage() {
   const [stok, setStok] = useState('1');
   const [tglExpired, setTglExpired] = useState('');
   const [deskripsi, setDeskripsi] = useState('');
+  const [platformPrice, setPlatformPrice] = useState('');
   const [activeCategory, setActiveCategory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [foto, setFoto] = useState(null);
@@ -28,6 +29,7 @@ export default function EditProductPage() {
           setNama(data.nama);
           setStok(data.stok.toString());
           setPrice(data.harga_asli);
+            setPlatformPrice(data.harga_platform || data.hargaPlatform || '');
           setCondition(data.jalur === 'A' ? 'edible' : 'inedible');
           setDeskripsi(data.deskripsi || '');
           setCurrentFotoUrl(data.foto);
@@ -55,6 +57,7 @@ export default function EditProductPage() {
       formData.append('nama', nama);
       formData.append('deskripsi', deskripsi || activeCategory || '');
       formData.append('harga_asli', price || 0);
+      if (platformPrice !== '') formData.append('harga_platform', platformPrice);
       formData.append('jalur', condition === 'edible' ? 'A' : 'B');
       formData.append('tgl_expired', tglExpired);
       formData.append('stok', stok);
@@ -152,6 +155,10 @@ export default function EditProductPage() {
                 <div className="space-y-2">
                   <label className="block font-label-md text-label-md text-on-surface">Harga Asli (Estimasi Rp)</label>
                   <input value={price} onChange={(e) => setPrice(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface outline-none font-body-md" type="number" />
+                </div>
+                <div className="space-y-2">
+                  <label className="block font-label-md text-label-md text-on-surface">Harga Platform (Harga Baru, Rp)</label>
+                  <input value={platformPrice} onChange={(e) => setPlatformPrice(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface outline-none font-body-md" type="number" />
                 </div>
               </div>
             ) : (

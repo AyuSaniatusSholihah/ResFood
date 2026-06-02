@@ -43,7 +43,7 @@ export default function CartPage() {
                           <span className="material-symbols-outlined">delete</span>
                         </button>
                       </div>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">{item.seller || 'Mitra ResFood'}</p>
+                      <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">{item.seller || 'Mitra TurahanSolo'}</p>
                     </div>
                     <div className="flex justify-between items-end">
                       <div className="flex items-center gap-2">
@@ -89,8 +89,7 @@ export default function CartPage() {
         )}
       </main>
 
-      {/* Bottom Navigation Space for mobile */}
-      <div className="h-20 md:hidden"></div>
+      <MobileNav />
     </div>
   );
 }

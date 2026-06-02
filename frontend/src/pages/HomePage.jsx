@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 import MobileNav from '../components/MobileNav';
 
 export default function HomePage() {
@@ -39,8 +38,8 @@ export default function HomePage() {
 
   const handleShare = () => {
     const shareData = {
-      title: 'ResFood Solo',
-      text: 'Ayo bergabung dengan ResFood Solo untuk menyelamatkan surplus pangan dan menjaga kelestarian lingkungan!',
+      title: 'TurahanSolo',
+      text: 'Ayo bergabung dengan TurahanSolo untuk menyelamatkan surplus pangan dan menjaga kelestarian lingkungan!',
       url: window.location.origin
     };
 
@@ -49,7 +48,7 @@ export default function HomePage() {
         .catch((err) => console.log('Error sharing:', err));
     } else {
       navigator.clipboard.writeText(window.location.origin)
-        .then(() => alert('Link ResFood berhasil disalin! Bagikan ke temanmu.'))
+        .then(() => alert('Link TurahanSolo berhasil disalin! Bagikan ke temanmu.'))
         .catch(() => alert('Gagal menyalin link.'));
     }
   };
@@ -115,7 +114,7 @@ export default function HomePage() {
         {/* How it Works */}
         <section className="py-32 px-8 md:px-16 max-w-container-max mx-auto">
           <div className="text-center mb-24">
-            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-sm">Bagaimana ResFood Bekerja?</h2>
+            <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-sm">Bagaimana TurahanSolo Bekerja?</h2>
             <div className="w-24 h-1 bg-primary mx-auto rounded-full"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-xl relative">
@@ -213,7 +212,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="flex flex-col gap-md items-start w-full">
-                <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl leading-relaxed">Ayo ajak 5 temanmu hari ini! Jika target tercapai, ResFood akan memberikan subsidi 500 paket pupuk organik gratis untuk petani lokal.</p>
+                <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl leading-relaxed">Ayo ajak 5 temanmu hari ini! Jika target tercapai, TurahanSolo akan memberikan subsidi 500 paket pupuk organik gratis untuk petani lokal.</p>
                 <div className="flex flex-col sm:flex-row gap-3 w-full mt-2">
                   <button className="bg-primary text-on-primary px-xl py-md rounded-xl font-label-md text-label-md shadow-lg shadow-primary/20 hover:scale-105 transition-transform shrink-0 text-center w-full sm:w-auto">
                     Kontribusi Sekarang
@@ -232,9 +231,6 @@ export default function HomePage() {
           </div>
         </section>
       </main>
-
-      {/* Footer */}
-      <Footer />
 
       {/* BottomNavBar (Mobile Only) */}
       <MobileNav />

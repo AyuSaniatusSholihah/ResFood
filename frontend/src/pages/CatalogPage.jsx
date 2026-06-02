@@ -1,221 +1,211 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 import MobileNav from '../components/MobileNav';
 
 export default function CatalogPage() {
-  const { getCartCount } = useCart();
-  const [activeChip, setActiveChip] = useState('Semua');
-  const [activeJalur, setActiveJalur] = useState('A'); // 'A' = Bisa Dimakan, 'B' = Sudah Basi
-  const [katalogSaya, setKatalogSaya] = useState([]);
+  const [makananList, setMakananList] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const [activeTab, setActiveTab] = useState('Semua'); // 'Semua' | 'A' | 'B' | 'C'
 
   useEffect(() => {
-    const fetchKatalog = async () => {
+    const fetchMakanan = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('/api/makanan/saya', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await fetch('/api/makanan');
         if (response.ok) {
           const data = await response.json();
-          setKatalogSaya(data);
+          setMakananList(data);
+        } else {
+          console.error('Gagal mengambil data makanan');
         }
       } catch (error) {
-        console.error('Error fetching katalog:', error);
+        console.error('Error fetching makanan:', error);
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchKatalog();
+    fetchMakanan();
   }, []);
 
-  // Reset page to 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeChip, activeJalur]);
-
-  const handleChipClick = (chipName) => {
-    setActiveChip(chipName);
-  };
-
-  const filteredKatalog = katalogSaya.filter((item) => {
-    // Filter berdasarkan jalur ('A' = Layak Konsumsi, 'B' = Tidak Layak)
-    const matchesJalur = item.jalur === activeJalur;
-
-    // Filter berdasarkan chip kategori
-    const matchesChip = activeChip === 'Semua' || 
-      (item.deskripsi && item.deskripsi.toLowerCase().includes(activeChip.toLowerCase())) ||
-      (item.nama && item.nama.toLowerCase().includes(activeChip.toLowerCase()));
-
-    return matchesJalur && matchesChip;
+  // Filter list makanan berdasarkan tab
+  const filteredMakanan = makananList.filter((item) => {
+    if (activeTab === 'Semua') return true;
+    return item.jalur === activeTab;
   });
 
-  // Calculate paginated items
-  const totalPages = Math.ceil(filteredKatalog.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredKatalog.slice(indexOfFirstItem, indexOfLastItem);
+  const getJalurBadgeClass = (jalur) => {
+    switch (jalur) {
+      case 'A':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'B':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'C':
+        return 'bg-rose-100 text-rose-800 border-rose-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
 
-  const chips = ['Semua', 'Penelitian', 'Pupuk/Kompos', 'Pakan Ternak', 'Maggot', 'Eco Enzyme', 'Biogas'];
+  const getJalurLabel = (jalur, compact = false) => {
+    if (compact) {
+      switch (jalur) {
+        case 'A':
+          return 'Jalur A';
+        case 'B':
+          return 'Jalur B';
+        case 'C':
+          return 'Jalur C';
+        default:
+          return `Jalur ${jalur}`;
+      }
+    }
+    switch (jalur) {
+      case 'A':
+        return 'Jalur A (Konsumsi)';
+      case 'B':
+        return 'Jalur B (Pakan Hewan)';
+      case 'C':
+        return 'Jalur C (Daur Ulang)';
+      default:
+        return `Jalur ${jalur}`;
+    }
+  };
 
   return (
-    <div className="bg-surface text-on-surface">
-      {/* TopAppBar */}
+    <div className="flex min-h-screen flex-col bg-gray-50 font-sans">
+      {/* Header */}
       <Header />
 
-      <main className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-xl">
-        {/* Dual-Purpose Toggle */}
-        <div className="flex justify-center mb-xl">
-          <div className="inline-flex p-xs bg-surface-container-high rounded-xl border border-outline-variant shadow-sm">
-            <button 
-              onClick={() => setActiveJalur('A')}
-              className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all duration-200 ${
-                activeJalur === 'A'
-                  ? 'bg-white shadow-sm text-on-surface font-bold ring-1 ring-tertiary-container/10'
-                  : 'text-on-surface-variant hover:bg-surface/50'
-              }`}
-            >
-              Bisa Dimakan 🟢
-            </button>
-            <button 
-              onClick={() => setActiveJalur('B')}
-              className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all duration-200 ${
-                activeJalur === 'B'
-                  ? 'bg-white shadow-sm text-on-surface font-bold ring-1 ring-tertiary-container/10'
-                  : 'text-on-surface-variant hover:bg-surface/50'
-              }`}
-            >
-              Sudah Basi / Tidak Layak 🟤
-            </button>
+      <main className="mx-auto w-full max-w-md flex-grow px-4 py-6 md:max-w-7xl md:px-8">
+        {/* Title Section */}
+        <div className="mb-6">
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-800 md:text-3xl">Katalog Surplus</h1>
+            <p className="text-xs text-gray-500 md:text-sm mt-1">
+              Temukan makanan surplus berkualitas dengan harga miring atau gratis.
+            </p>
           </div>
         </div>
 
-        {/* Hero / Banner Section */}
-        <section className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 bg-surface-container-low p-6 rounded-2xl border border-outline-variant shadow-sm">
-          <div>
-            <h2 className="font-headline-lg text-headline-lg md:text-headline-lg text-on-surface">Katalog Saya</h2>
-            <p className="font-body-lg text-body-lg text-on-surface-variant mt-2 max-w-2xl">
-              Kelola makanan yang Anda bagikan atau jual kepada komunitas. Pantau status dan ketersediaan stok Anda di sini.
-            </p>
-          </div>
-          <Link to="/upload" className="shrink-0 flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full font-label-lg text-label-lg font-bold shadow hover:bg-primary/90 transition-colors">
-            <span className="material-symbols-outlined">add_circle</span>
-            Tambah Makanan
-          </Link>
-        </section>
-
-        {/* Filter Chips */}
-        <div className="flex gap-sm overflow-x-auto hide-scrollbar pb-md mb-lg snap-x">
-          {chips.map((chip) => (
+        {/* Filter Tabs */}
+        <div className="flex gap-2 border-b border-gray-200 pb-3 mb-6 overflow-x-auto hide-scrollbar">
+          {['Semua', 'A', 'B', 'C'].map((tab) => (
             <button
-              key={chip}
-              onClick={() => handleChipClick(chip)}
-              className={`shrink-0 px-md py-xs rounded-full font-label-md text-label-md border transition-all snap-start
-                ${activeChip === chip 
-                  ? 'bg-secondary text-on-secondary border-secondary' 
-                  : 'bg-surface border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold border transition-all ${
+                activeTab === tab
+                  ? 'bg-[#1D9E75] text-white border-[#1D9E75] shadow-sm'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
             >
-              {chip}
+              {tab === 'Semua' ? 'Semua' : getJalurLabel(tab)}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {loading ? (
-            <p className="text-on-surface-variant col-span-2">Memuat katalog...</p>
-          ) : currentItems.length > 0 ? (
-            currentItems.map((item) => (
-              <div key={item.id} className="group bg-white rounded-[24px] overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all flex flex-col">
-                <div className="relative h-32 md:h-56 overflow-hidden">
-                  <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={item.nama} src={item.foto || 'https://images.unsplash.com/photo-1590432244458-18e38d721bb8?auto=format&fit=crop&w=600&q=80'}/>
-                  <div className="absolute top-md left-md">
-                    <span className="bg-[#D7CCC8] text-[#795548] px-md py-xs rounded-full text-label-sm font-label-sm shadow-sm">{item.jalur === 'A' ? 'Layak Konsumsi' : 'Tidak Layak'}</span>
-                  </div>
-                </div>
-                <div className="p-lg flex flex-col flex-grow">
-                  <div className="flex justify-between items-start mb-sm">
-                    <h3 className="font-headline-sm text-[14px] md:text-headline-sm leading-tight text-on-surface line-clamp-1">{item.nama}</h3>
-                    <span className="text-tertiary font-bold shrink-0">{item.stok} porsi</span>
-                  </div>
-                  <p className="text-body-md text-on-surface-variant mb-md line-clamp-2">{item.deskripsi}</p>
-                  <div className="flex justify-between items-center mt-auto mb-lg">
-                    <span className="text-primary font-headline-md">Rp {item.harga_platform}</span>
-                    <span className="bg-surface-container text-on-surface-variant px-sm py-xs rounded-md text-xs font-semibold">{item.status}</span>
-                  </div>
-                  <div>
-                    <Link to={`/edit-produk/${item.id}`} className="w-full block text-center bg-tertiary-container text-on-tertiary-container py-md rounded-xl font-label-lg text-label-lg font-bold hover:opacity-90 active:scale-[0.98] transition-all">
-                      Kelola Item
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-on-surface-variant col-span-2">Belum ada barang di kategori ini.</p>
-          )}
-        </div>
-
-        {/* Pagination Controls */}
-        {!loading && totalPages > 1 && (
-          <div className="flex justify-center items-center gap-2 mt-12">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className={`p-2 rounded-full border transition-all ${
-                currentPage === 1
-                  ? 'border-outline-variant/30 text-on-surface-variant/30 cursor-not-allowed'
-                  : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'
-              }`}
-            >
-              <span className="material-symbols-outlined align-middle">chevron_left</span>
-            </button>
-            
-            {Array.from({ length: totalPages }, (_, index) => {
-              const pageNumber = index + 1;
+        {/* Content Section */}
+        {loading ? (
+          <div className="flex h-64 flex-col items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-[#1D9E75]"></div>
+            <p className="mt-3 text-xs text-gray-500">Memuat makanan surplus...</p>
+          </div>
+        ) : filteredMakanan.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {filteredMakanan.map((item) => {
+              const hasDiscount = item.hargaPlatform < item.hargaAsli;
               return (
-                <button
-                  key={pageNumber}
-                  onClick={() => setCurrentPage(pageNumber)}
-                  className={`w-10 h-10 rounded-full font-label-md text-label-md transition-all ${
-                    currentPage === pageNumber
-                      ? 'bg-primary text-on-primary font-bold'
-                      : 'hover:bg-surface-container-high text-on-surface-variant'
-                  }`}
+                <div
+                  key={item.id}
+                  className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-100 hover:shadow-md transition-all group w-full"
                 >
-                  {pageNumber}
-                </button>
+                  {/* Photo Container */}
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
+                    <img
+                      src={item.foto || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80'}
+                      alt={item.nama}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    {/* Expiry Badge */}
+                    <div className="absolute top-2 left-2">
+                      <span className={`rounded-lg border px-2 py-0.5 text-[8px] md:text-[10px] font-bold shadow-sm uppercase ${getJalurBadgeClass(item.jalur)}`}>
+                        {getJalurLabel(item.jalur, true)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Detail Container */}
+                  <div className="flex flex-grow flex-col p-3 justify-between">
+                    <div>
+                      {/* Provider name */}
+                      <span className="text-[8px] md:text-[10px] font-medium text-gray-400 uppercase tracking-wider block">
+                        Penyedia: {item.penyedia?.nama || 'Solo'}
+                      </span>
+                      <h3 className="mt-1 font-bold text-gray-800 text-xs md:text-sm line-clamp-1">
+                        {item.nama}
+                      </h3>
+                      {/* Description snippet */}
+                      <p className="mt-1 text-[10px] md:text-xs text-gray-500 line-clamp-2">
+                        {item.deskripsi || 'Tidak ada deskripsi produk.'}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t border-gray-100 flex flex-col justify-between gap-1.5">
+                      {/* Price Section */}
+                      <div>
+                        {hasDiscount ? (
+                          <div className="flex flex-col">
+                            <span className="text-[9px] md:text-xs text-gray-400 line-through">
+                              Rp {item.hargaAsli.toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-xs md:text-sm font-extrabold text-[#1D9E75]">
+                              Rp {item.hargaPlatform.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs md:text-sm font-extrabold text-gray-800">
+                            {item.hargaPlatform === 0 ? 'Gratis' : `Rp ${item.hargaPlatform.toLocaleString('id-ID')}`}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Stock & Action Link */}
+                      <div className="flex items-center justify-between border-t border-gray-50 pt-1.5">
+                        <span className="text-[8px] md:text-[10px] text-gray-400 font-medium">Stok: {item.stok}</span>
+                        <Link
+                          to={`/makanan/${item.id}`}
+                          className="text-[10px] md:text-xs font-bold text-[#1D9E75] hover:underline"
+                        >
+                          Detail →
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               );
             })}
-
-            <button
-              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className={`p-2 rounded-full border transition-all ${
-                currentPage === totalPages
-                  ? 'border-outline-variant/30 text-on-surface-variant/30 cursor-not-allowed'
-                  : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'
-              }`}
-            >
-              <span className="material-symbols-outlined align-middle">chevron_right</span>
-            </button>
+          </div>
+        ) : (
+          <div className="flex h-64 flex-col items-center justify-center text-center">
+            <svg className="h-16 w-16 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="font-bold text-gray-700">Tidak ada makanan</h3>
+            <p className="text-xs text-gray-400 mt-1">Saat ini belum ada makanan surplus di kategori ini.</p>
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <Footer />
+      <Link
+        to="/makanan/tambah"
+        className="fixed bottom-24 right-4 z-40 flex items-center gap-2 rounded-full bg-[#1D9E75] px-4 py-3 text-xs font-bold text-white shadow-lg transition-all hover:bg-[#16805E] active:scale-95 md:bottom-6 md:right-6"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Tambah Makanan
+      </Link>
 
-      {/* BottomNavBar (Mobile Only) */}
       <MobileNav />
     </div>
   );

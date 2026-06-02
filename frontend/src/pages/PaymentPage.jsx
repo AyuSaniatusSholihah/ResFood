@@ -22,6 +22,13 @@ export default function PaymentPage() {
   const totalBayar = totalBelanja + biayaLayanan;
 
   const handlePayment = async () => {
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!storedUser.kecamatan) {
+      alert('Lengkapi kecamatan alamat Anda terlebih dahulu sebelum melakukan transaksi.');
+      navigate('/dashboard');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('token');
@@ -326,8 +333,8 @@ export default function PaymentPage() {
       {/* Footer */}
       <footer className="w-full py-8 px-5 md:px-12 flex flex-col md:flex-row justify-between items-center gap-4 bg-surface-container-highest border-t border-outline-variant mt-8 mb-20 md:mb-0">
         <div className="flex flex-col gap-1 items-center md:items-start">
-          <span className="text-headline-md font-headline-md text-on-surface">ResFood</span>
-          <p className="font-body-md text-body-md text-on-surface-variant">© 2024 ResFood Solo. Memberdayakan Ekonomi Sirkular.</p>
+          <span className="text-headline-md font-headline-md text-on-surface">TurahanSolo</span>
+          <p className="font-body-md text-body-md text-on-surface-variant">© 2026 TurahanSolo. Memberdayakan Ekonomi Sirkular.</p>
         </div>
         <div className="flex gap-8">
           <Link to="#" className="font-label-lg text-label-lg text-on-surface-variant hover:text-primary hover:underline transition-all">Tentang Kami</Link>

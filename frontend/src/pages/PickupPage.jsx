@@ -192,8 +192,8 @@ export default function PickupPage() {
 
       <footer className="w-full py-xl px-margin-mobile md:px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-md bg-surface-container-highest border-t border-outline-variant mb-24">
         <div className="flex flex-col gap-xs items-center md:items-start">
-          <span className="text-headline-md font-headline-md text-on-surface">ResFood Solo</span>
-          <p className="font-body-md text-body-md text-on-surface-variant text-center md:text-left">© 2024 ResFood Solo. Memberdayakan Ekonomi Sirkular.</p>
+          <span className="text-headline-md font-headline-md text-on-surface">TurahanSolo</span>
+          <p className="font-body-md text-body-md text-on-surface-variant text-center md:text-left">© 2026 TurahanSolo. Memberdayakan Ekonomi Sirkular.</p>
         </div>
         <div className="flex gap-lg flex-wrap justify-center">
           <Link to="#" className="font-label-lg text-label-lg text-on-surface-variant hover:text-primary transition-all">Tentang Kami</Link>

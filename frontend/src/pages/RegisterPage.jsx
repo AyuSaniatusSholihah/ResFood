@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 
-export default function LoginPage() {
+export default function RegisterPage() {
+  const [nama, setNama] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -10,47 +10,56 @@ export default function LoginPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
   const navigate = useNavigate();
+
+  const validateEmail = (emailStr) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(emailStr);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!email || !password) {
-      setErrorMsg('Email dan Password wajib diisi!');
+    // Client-side validations
+    if (!nama.trim()) {
+      setErrorMsg('Nama Lengkap harus diisi!');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setErrorMsg('Format email tidak valid!');
+      return;
+    }
+
+    if (password.length < 8) {
+      setErrorMsg('Password minimal harus 8 karakter!');
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ nama, email, password })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Kombinasi Email/Password salah');
+        throw new Error(data.message || 'Pendaftaran gagal');
       }
 
-      setSuccessMsg('Login berhasil! Mengarahkan...');
-      
-      // Simpan session ke AuthContext
-      login(data.token, data.user);
+      // Setelah register, user tetap harus login manual.
+      setSuccessMsg('Registrasi berhasil! Silakan login dulu.');
 
       setTimeout(() => {
-        if (data.user && (data.user.role === 'ADMIN' || data.user.role === 'admin')) {
-          navigate('/admin');
-        } else {
-          navigate('/dashboard');
-        }
+        navigate('/login');
       }, 1000);
     } catch (err) {
       setErrorMsg(err.message);
@@ -67,7 +76,7 @@ export default function LoginPage() {
         {/* Header/Brand logo */}
         <div className="text-center">
           <h2 className="text-3xl font-extrabold tracking-tight text-[#1D9E75]">TurahanSolo</h2>
-          <p className="mt-2 text-sm text-gray-500">Masuk ke akun Anda untuk berkontribusi mengelola surplus pangan.</p>
+          <p className="mt-2 text-sm text-gray-500">Mulai langkah Anda mengelola surplus pangan bermartabat.</p>
         </div>
 
         {/* Message Notifications */}
@@ -84,6 +93,19 @@ export default function LoginPage() {
 
         {/* Form */}
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          {/* Nama Lengkap */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600">Nama Lengkap</label>
+            <input
+              type="text"
+              required
+              value={nama}
+              onChange={(e) => setNama(e.target.value)}
+              placeholder="Masukkan nama lengkap"
+              className="mt-1 w-full rounded-xl border border-gray-300 p-3 text-sm focus:border-[#1D9E75] focus:outline-none focus:ring-1 focus:ring-[#1D9E75]"
+            />
+          </div>
+
           {/* Email */}
           <div>
             <label className="text-xs font-semibold text-gray-600">Email</label>
@@ -99,19 +121,14 @@ export default function LoginPage() {
 
           {/* Password */}
           <div>
-            <div className="flex justify-between items-center">
-              <label className="text-xs font-semibold text-gray-600">Password</label>
-              <a href="#forgot" className="text-xs font-semibold text-[#1D9E75] hover:underline">
-                Lupa Password?
-              </a>
-            </div>
+            <label className="text-xs font-semibold text-gray-600">Password</label>
             <div className="relative mt-1">
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Masukkan password Anda"
+                placeholder="Minimal 8 karakter"
                 className="w-full rounded-xl border border-gray-300 p-3 pr-10 text-sm focus:border-[#1D9E75] focus:outline-none focus:ring-1 focus:ring-[#1D9E75]"
               />
               <button
@@ -141,15 +158,15 @@ export default function LoginPage() {
             disabled={loading}
             className="mt-6 w-full rounded-xl bg-[#1D9E75] p-3 text-sm font-semibold text-white transition-all hover:bg-[#16805E] active:scale-[0.98] disabled:opacity-50"
           >
-            {loading ? 'Masuk...' : 'Masuk Sekarang'}
+            {loading ? 'Mendaftarkan...' : 'Daftar Sekarang'}
           </button>
         </form>
 
-        {/* Link back to register */}
+        {/* Link back to login */}
         <div className="mt-6 text-center text-xs text-gray-500">
-          <span>Belum punya akun? </span>
-          <Link to="/register" className="font-semibold text-[#1D9E75] hover:underline">
-            Daftar
+          <span>Sudah punya akun? </span>
+          <Link to="/login" className="font-semibold text-[#1D9E75] hover:underline">
+            Masuk
           </Link>
         </div>
 

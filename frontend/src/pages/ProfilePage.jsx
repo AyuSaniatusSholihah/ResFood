@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 import MobileNav from '../components/MobileNav';
+
+const EMPTY_AVATAR = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22%3E%3Crect width=%2280%22 height=%2280%22 fill=%22%23E5E7EB%22/%3E%3Ccircle cx=%2240%22 cy=%2230%22 r=%2214%22 fill=%22%239CA3AF%22/%3E%3Cpath d=%22M16 72c2-12 12-20 24-20s22 8 24 20%22 fill=%22%239CA3AF%22/%3E%3C/svg%3E';
 
 export default function ProfilePage() {
   const [co2Score, setCo2Score] = useState(0);
   const [targetScore, setTargetScore] = useState(1240);
+  const [joinedAt, setJoinedAt] = useState('');
 
   const [profile, setProfile] = useState({
     nama: '',
     nama_toko: '',
-    alamat: '',
+    kecamatan: '',
+    alamat_detail: '',
     no_telp: '',
     foto: ''
   });
@@ -33,10 +36,14 @@ export default function ProfilePage() {
           setProfile({
             nama: data.nama || '',
             nama_toko: data.nama_toko || '',
-            alamat: data.alamat || '',
+            kecamatan: data.kecamatan || '',
+            alamat_detail: data.alamat_detail || '',
             no_telp: data.no_telp || '',
             foto: data.foto || ''
           });
+          if (data.createdAt) {
+            setJoinedAt(new Date(data.createdAt).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' }));
+          }
           if (data.carbon_score) {
             setTargetScore(data.carbon_score);
           }
@@ -140,7 +147,13 @@ export default function ProfilePage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(profile)
+        body: JSON.stringify({
+          nama: profile.nama,
+          nama_toko: profile.nama_toko,
+          no_telp: profile.no_telp,
+          kecamatan: profile.kecamatan,
+          alamat_detail: profile.alamat_detail
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -170,7 +183,7 @@ export default function ProfilePage() {
               <img 
                 alt={profile.nama || 'Foto Profil'} 
                 className="w-full h-full object-cover" 
-                src={profile.foto || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                src={profile.foto || EMPTY_AVATAR}
               />
               {isUploadingPhoto && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white">
@@ -207,13 +220,13 @@ export default function ProfilePage() {
           
           <div className="text-center md:text-left flex-1 space-y-1">
             <h1 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">{profile.nama || 'Penyedia Pangan'}</h1>
-            <p className="font-body-md text-body-md text-on-surface-variant bg-secondary-container inline-block px-4 py-1 rounded-full">{profile.nama_toko || 'Mitra ResFood'}</p>
+            <p className="font-body-md text-body-md text-on-surface-variant bg-secondary-container inline-block px-4 py-1 rounded-full">{profile.nama_toko || 'Mitra TurahanSolo'}</p>
             <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-4">
               <span className="flex items-center gap-1 font-label-lg text-label-lg text-primary">
-                <span className="material-symbols-outlined text-[18px]">location_on</span> Solo, Jawa Tengah
+                <span className="material-symbols-outlined text-[18px]">location_on</span> {profile.kecamatan ? `${profile.kecamatan}, Solo` : 'Solo, Jawa Tengah'}
               </span>
               <span className="flex items-center gap-1 font-label-lg text-label-lg text-tertiary">
-                <span className="material-symbols-outlined text-[18px]">calendar_today</span> Bergabung: Jan 2024
+                <span className="material-symbols-outlined text-[18px]">calendar_today</span> Bergabung: {joinedAt || '-'}
               </span>
             </div>
             <div className="mt-4 flex justify-center md:justify-start">
@@ -304,6 +317,23 @@ export default function ProfilePage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
+                    <label className="block font-label-md text-label-md text-on-surface-variant">Kecamatan (Solo)</label>
+                    <select
+                      name="kecamatan"
+                      value={profile.kecamatan}
+                      onChange={handleProfileChange}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-body-md"
+                    >
+                      <option value="">Pilih kecamatan</option>
+                      <option value="Banjarsari">Banjarsari</option>
+                      <option value="Jebres">Jebres</option>
+                      <option value="Laweyan">Laweyan</option>
+                      <option value="Pasar Kliwon">Pasar Kliwon</option>
+                      <option value="Serengan">Serengan</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
                     <label className="block font-label-md text-label-md text-on-surface-variant">Nomor WhatsApp</label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-body-md text-on-surface-variant">+62</span>
@@ -316,18 +346,9 @@ export default function ProfilePage() {
                           val = val.replace(/\D/g, '');
                           handleProfileChange({ target: { name: 'no_telp', value: val ? '+62' + val : '' } });
                         }} 
-                        required 
                         className="w-full pl-14 pr-4 py-3 rounded-xl border border-outline-variant bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-body-md" 
                         placeholder="8123456789"
                       />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block font-label-md text-label-md text-on-surface-variant font-bold text-primary flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[18px]">verified</span> Terverifikasi Resmi
-                    </label>
-                    <div className="px-4 py-3 rounded-xl bg-surface-container text-on-surface-variant text-sm font-body-md select-none border border-outline-variant">
-                      Solo, Jawa Tengah
                     </div>
                   </div>
                 </div>
@@ -335,10 +356,9 @@ export default function ProfilePage() {
                 <div className="space-y-1">
                   <label className="block font-label-md text-label-md text-on-surface-variant">Alamat Lengkap</label>
                   <textarea 
-                    name="alamat" 
-                    value={profile.alamat} 
+                    name="alamat_detail" 
+                    value={profile.alamat_detail} 
                     onChange={handleProfileChange} 
-                    required 
                     rows="3" 
                     className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all font-body-md resize-none" 
                     placeholder="Tulis alamat lengkap penjemputan makanan Anda..."
@@ -473,13 +493,7 @@ export default function ProfilePage() {
                           <img 
                             alt={item.nama} 
                             className="w-full h-full object-cover" 
-                            src={item.foto || (
-                              index % 3 === 0 
-                                ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                                : index % 3 === 1 
-                                  ? "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                                  : "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                            )}
+                            src={item.foto || EMPTY_AVATAR}
                           />
                         </div>
                         <div className="flex-1">
@@ -524,9 +538,6 @@ export default function ProfilePage() {
           <span className="hidden md:inline font-bold">Donasi Makanan</span>
         </Link>
       </div>
-
-      {/* Footer */}
-      <Footer />
 
       {/* BottomNavBar (Mobile Only) */}
       <MobileNav />

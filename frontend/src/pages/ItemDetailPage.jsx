@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import MobileNav from '../components/MobileNav';
 
 export default function ItemDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { addToCart, getCartCount } = useCart();
-  const [quantity, setQuantity] = useState(1);
-  const [timeLeft, setTimeLeft] = useState(5099); // 1:24:59 in seconds
-  const [isScrolled, setIsScrolled] = useState(false);
+  const { token, user } = useAuth();
+  
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -22,7 +22,7 @@ export default function ItemDetailPage() {
           const data = await response.json();
           setItem(data);
         } else {
-          console.error('Failed to fetch item details');
+          console.error('Gagal memuat detail makanan');
         }
       } catch (error) {
         console.error('Error fetching item details:', error);
@@ -33,38 +33,6 @@ export default function ItemDetailPage() {
     fetchItem();
   }, [id]);
 
-  useEffect(() => {
-    if (!item || !item.tgl_expired) return;
-
-    const calculateTimeLeft = () => {
-      const difference = +new Date(item.tgl_expired) - +new Date();
-      return difference > 0 ? Math.floor(difference / 1000) : 0;
-    };
-
-    setTimeLeft(calculateTimeLeft());
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [item]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const formatTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
   const increaseQty = () => {
     if (item && quantity < item.stok) setQuantity(q => q + 1);
   };
@@ -73,25 +41,53 @@ export default function ItemDetailPage() {
     if (quantity > 1) setQuantity(q => q - 1);
   };
 
-  const handleAddToCart = () => {
-    if (!item) return;
-    addToCart({
-      id: item.id,
-      name: item.nama,
-      seller: item.penyedia?.nama_toko || item.penyedia?.nama || 'Solo',
-      price: item.harga_platform,
-      image: item.foto || 'https://images.unsplash.com/photo-1590432244458-18e38d721bb8?auto=format&fit=crop&w=600&q=80',
-      quantity
-    });
-    alert('Berhasil ditambahkan ke keranjang!');
+  const handleAmbil = async () => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/transaksi/ambil', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ makananId: item.id, jumlah: quantity })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert('Permohonan pengambilan berhasil diajukan! Menunggu penyedia menyiapkan makanan.');
+        navigate('/dashboard');
+      } else {
+        alert('Gagal mengajukan pengambilan: ' + data.message);
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePesan = () => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    // Arahkan ke halaman pesan dengan query parameter makananId dan jumlah
+    navigate(`/pesan/${item.id}?jumlah=${quantity}`);
   };
 
   if (loading) {
     return (
-      <div className="bg-background text-on-surface min-h-screen">
+      <div className="bg-gray-50 text-gray-800 min-h-screen">
         <Header />
-        <main className="max-w-container-max mx-auto px-4 py-8 flex justify-center items-center h-[50vh]">
-          <p className="text-on-surface-variant font-headline-sm">Memuat detail makanan...</p>
+        <main className="max-w-md mx-auto px-4 py-8 flex justify-center items-center h-[50vh]">
+          <div className="flex flex-col items-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-[#1D9E75]"></div>
+            <p className="mt-3 text-xs text-gray-500">Memuat detail makanan...</p>
+          </div>
         </main>
       </div>
     );
@@ -99,172 +95,198 @@ export default function ItemDetailPage() {
 
   if (!item) {
     return (
-      <div className="bg-background text-on-surface min-h-screen">
+      <div className="bg-gray-50 text-gray-800 min-h-screen">
         <Header />
-        <main className="max-w-container-max mx-auto px-4 py-8 flex flex-col justify-center items-center h-[50vh]">
-          <p className="text-on-surface-variant font-headline-sm mb-md">Makanan tidak ditemukan.</p>
-          <Link to="/dashboard" className="bg-primary text-on-primary px-lg py-sm rounded-xl">Kembali ke Beranda</Link>
+        <main className="max-w-md mx-auto px-4 py-8 flex flex-col justify-center items-center h-[50vh] text-center">
+          <svg className="h-16 w-16 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-gray-600 font-bold mb-4">Makanan tidak ditemukan.</p>
+          <Link to="/katalog" className="bg-[#1D9E75] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow hover:bg-[#16805E]">
+            Kembali ke Katalog
+          </Link>
         </main>
       </div>
     );
   }
 
-  const pricePerItem = item.harga_platform;
+  const isOwner = user && user.id === item.penyediaId;
+  const isOutOfStock = item.stok === 0;
+  const hasDiscount = item.hargaPlatform < item.hargaAsli;
+
+  const getJalurBadgeClass = (jalur) => {
+    switch (jalur) {
+      case 'A':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'B':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'C':
+        return 'bg-rose-100 text-rose-800 border-rose-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getJalurLabel = (jalur) => {
+    switch (jalur) {
+      case 'A':
+        return 'Jalur A (Konsumsi)';
+      case 'B':
+        return 'Jalur B (Pakan Hewan)';
+      case 'C':
+        return 'Jalur C (Daur Ulang)';
+      default:
+        return `Jalur ${jalur}`;
+    }
+  };
 
   return (
-    <div className="bg-background text-on-surface font-body-md selection:bg-primary-container selection:text-on-primary-container">
-      {/* Top Navigation Shell */}
+    <div className="bg-gray-50 text-gray-800 min-h-screen pb-24 font-sans">
       <Header />
 
-      <main className="max-w-container-max mx-auto px-4 md:px-12 py-8 pb-32">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-xl">
-          {/* Left Column: Media & Impact */}
-          <div className="lg:col-span-7 space-y-lg">
-            {/* Hero Image */}
-            <div className="relative w-full aspect-[4/3] md:aspect-video rounded-[32px] overflow-hidden shadow-lg group">
-              <img alt={item.nama} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src={item.foto || 'https://images.unsplash.com/photo-1590432244458-18e38d721bb8?auto=format&fit=crop&w=600&q=80'}/>
-              <div className="absolute top-6 left-6 flex gap-2">
-                <span className="bg-primary text-on-primary px-4 py-2 rounded-full font-label-md flex items-center gap-2 shadow-md">
-                  <span className="material-symbols-outlined text-sm" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
-                  {item.jalur === 'A' ? 'Layak Konsumsi' : 'Sudah Basi'}
+      <main className="mx-auto w-full max-w-md px-4 py-6 md:max-w-4xl md:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+          
+          {/* Sisi Kiri: Foto Besar */}
+          <div className="md:col-span-6">
+            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-100 shadow-inner">
+              <img
+                src={item.foto || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80'}
+                alt={item.nama}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute top-4 left-4">
+                <span className={`rounded-xl border px-3 py-1 text-xs font-bold shadow-sm uppercase ${getJalurBadgeClass(item.jalur)}`}>
+                  {getJalurLabel(item.jalur)}
                 </span>
               </div>
             </div>
 
-            {/* Impact Card */}
-            <div className="bg-secondary-container text-on-secondary-container p-6 rounded-[24px] flex items-center gap-6 border border-primary-container/10 mt-6">
-              <div className="w-16 h-16 rounded-2xl bg-primary-container flex items-center justify-center text-on-primary-container shadow-inner">
-                <span className="material-symbols-outlined text-[32px]" style={{fontVariationSettings: "'FILL' 1"}}>eco</span>
+            {/* Donor Info */}
+            <div className="mt-6 flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+              <div className="w-10 h-10 rounded-full bg-[#1D9E75]/10 text-[#1D9E75] flex items-center justify-center font-bold">
+                {item.penyedia?.nama?.charAt(0) || 'S'}
               </div>
               <div>
-                <h3 className="font-headline-sm text-headline-sm">Dampak Karbon</h3>
-                <p className="font-body-md text-body-md opacity-90">Mengambil porsi ini menyelamatkan <span className="font-bold underline">~2.4 kg CO₂</span> dari pelepasan gas metana di TPA.</p>
+                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Penyedia Terdaftar</p>
+                <h4 className="text-sm font-bold text-gray-800">{item.penyedia?.nama || 'Solo'}</h4>
               </div>
-            </div>
-
-            {/* Description Section */}
-            <div className="space-y-md mt-6">
-              <h2 className="font-headline-md text-headline-md">{item.nama}</h2>
-              <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-                {item.deskripsi || 'Tidak ada deskripsi produk.'}
-              </p>
             </div>
           </div>
 
-          {/* Right Column: Actions & Details */}
-          <div className="lg:col-span-5 space-y-lg mt-8 lg:mt-0">
-            {/* Pricing & Timer Card */}
-            <div className="bg-surface-container-lowest p-8 rounded-[32px] shadow-[0px_4px_20px_rgba(0,0,0,0.05)] border border-outline-variant/30 space-y-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="text-on-surface-variant font-label-md uppercase tracking-wider">Harga Penyelamatan</span>
-                  <div className="flex items-center gap-3">
-                    <span className="font-headline-lg text-headline-lg text-primary">Rp {item.harga_platform}</span>
-                    <span className="text-on-surface-variant line-through text-body-md">Rp {item.harga_asli}</span>
+          {/* Sisi Kanan: Deskripsi & Aksi */}
+          <div className="md:col-span-6 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-xl font-extrabold text-gray-800 md:text-2xl">{item.nama}</h1>
+                {item.tglExpired && (
+                  <p className="text-[10px] text-gray-400 font-medium mt-1">
+                    Batas Kadaluarsa: {new Date(item.tglExpired).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+              </div>
+
+              {/* Harga Platform */}
+              <div className="bg-[#1D9E75]/5 border border-[#1D9E75]/10 p-4 rounded-2xl">
+                <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block">Harga Penyelamatan</span>
+                {hasDiscount ? (
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-xl font-black text-[#1D9E75]">
+                      Rp {item.hargaPlatform.toLocaleString('id-ID')}
+                    </span>
+                    <span className="text-xs text-gray-400 line-through">
+                      Rp {item.hargaAsli.toLocaleString('id-ID')}
+                    </span>
                   </div>
-                  <span className="inline-block px-3 py-1 bg-tertiary-container/20 text-tertiary font-bold rounded-lg text-label-md mt-2">Hemat 70%</span>
-                  {item.tgl_expired && (
-                    <p className="text-[12px] text-on-surface-variant mt-2 font-semibold flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">event</span>
-                      Batas: {new Date(item.tgl_expired).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  )}
-                </div>
-                <div className="bg-error-container text-error px-4 py-3 rounded-2xl text-center min-w-[100px]">
-                  <span className="block text-[10px] font-bold uppercase tracking-tighter">Berakhir Dalam</span>
-                  <span className="block font-headline-sm text-headline-sm tabular-nums">{formatTime(timeLeft)}</span>
-                </div>
+                ) : (
+                  <span className="text-xl font-black text-gray-800 block mt-1">
+                    {item.hargaPlatform === 0 ? 'Gratis' : `Rp ${item.hargaPlatform.toLocaleString('id-ID')}`}
+                  </span>
+                )}
               </div>
 
-              <hr className="border-outline-variant/50 my-6"/>
-
-              {/* Quantity Selector */}
-              <div className="space-y-3">
-                <label className="font-label-lg text-label-lg text-on-surface-variant">Pilih Jumlah (Tersedia: {item.stok} Porsi)</label>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex items-center border-2 border-outline-variant rounded-2xl overflow-hidden bg-surface w-max">
-                    <button onClick={decreaseQty} className="p-4 hover:bg-surface-container transition-colors"><span className="material-symbols-outlined">remove</span></button>
-                    <span className="px-6 font-headline-sm text-headline-sm w-12 text-center">{quantity}</span>
-                    <button onClick={increaseQty} className="p-4 hover:bg-surface-container transition-colors"><span className="material-symbols-outlined">add</span></button>
-                  </div>
-                  <span className="text-on-surface-variant font-body-md">Total: <span className="font-bold text-on-surface">Rp {(pricePerItem * quantity).toLocaleString('id-ID')}</span></span>
-                </div>
-              </div>
-            </div>
-
-            {/* Donor Card with Mini Map */}
-            <div className="bg-surface-container-low p-6 rounded-[24px] space-y-4 mt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-sm flex items-center justify-center bg-primary-container text-on-primary-container">
-                  <span className="material-symbols-outlined text-[28px]">store</span>
-                </div>
-                <div>
-                  <h4 className="font-headline-sm text-headline-sm">{item.penyedia?.nama_toko || item.penyedia?.nama || 'Solo'}</h4>
-                  <div className="flex items-center gap-1 text-primary">
-                    <span className="material-symbols-outlined text-sm" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
-                    <span className="font-label-md">4.9 (Penyedia Terverifikasi)</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="relative w-full h-32 rounded-2xl overflow-hidden">
-                <img alt="Map view" className="w-full h-full object-cover brightness-90" src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=600&q=80"/>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-8 h-8 bg-primary rounded-full border-4 border-white shadow-lg animate-pulse"></div>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[18px]">location_on</span>
-                <p className="text-body-md">{item.penyedia?.alamat || 'Solo (Lokasi detail akan diberikan setelah pembayaran)'}</p>
+              {/* Deskripsi */}
+              <div>
+                <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block">Deskripsi</span>
+                <p className="text-xs text-gray-600 leading-relaxed mt-1">
+                  {item.deskripsi || 'Tidak ada deskripsi produk.'}
+                </p>
               </div>
 
-              {item.penyedia?.no_telp && (
+              {/* Qty Selector (Hanya jika bukan owner dan stok tersedia) */}
+              {!isOwner && !isOutOfStock && (
                 <div className="pt-2">
-                  <a 
-                    href={`https://wa.me/${item.penyedia.no_telp.replace(/\+/g, '')}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="w-full flex items-center justify-center gap-sm bg-[#25D366] text-white py-3 rounded-xl font-bold hover:bg-[#20ba5a] transition-all"
-                  >
-                    <span className="material-symbols-outlined">chat</span>
-                    Hubungi via WhatsApp ({item.penyedia.nama_toko || item.penyedia.nama})
-                  </a>
+                  <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block mb-2">
+                    Pilih Jumlah (Tersedia: {item.stok} Porsi)
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden bg-white">
+                      <button onClick={decreaseQty} className="px-3 py-2 text-gray-500 hover:bg-gray-50">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <span className="px-4 font-bold text-sm text-gray-800">{quantity}</span>
+                      <button onClick={increaseQty} className="px-3 py-2 text-gray-500 hover:bg-gray-50">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
+                    {item.hargaPlatform > 0 && (
+                      <span className="text-xs font-semibold text-gray-500">
+                        Subtotal: <span className="font-extrabold text-gray-800">Rp {(item.hargaPlatform * quantity).toLocaleString('id-ID')}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
+
+            {/* Action Buttons */}
+            <div className="mt-8">
+              {isOwner ? (
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-center text-xs text-gray-500 font-medium flex flex-col gap-3">
+                  <div>Ini adalah makanan yang Anda kelola. Anda tidak dapat melakukan pemesanan.</div>
+                  <div className="flex gap-2 justify-center">
+                    <Link to={`/edit-produk/${item.id}`} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
+                      Edit Produk
+                    </Link>
+                  </div>
+                </div>
+              ) : isOutOfStock ? (
+                <button
+                  disabled
+                  className="w-full rounded-xl bg-gray-200 p-3.5 text-center text-sm font-bold text-gray-400 cursor-not-allowed"
+                >
+                  Stok Habis
+                </button>
+              ) : (
+                <>
+                  {item.jalur === 'A' ? (
+                    <button
+                      onClick={handlePesan}
+                      className="w-full rounded-xl bg-[#1D9E75] p-3.5 text-center text-sm font-bold text-white shadow-lg transition-all hover:bg-[#16805E] active:scale-[0.98]"
+                    >
+                      Pesan Sekarang
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleAmbil}
+                      disabled={submitting}
+                      className="w-full rounded-xl bg-orange-500 p-3.5 text-center text-sm font-bold text-white shadow-lg transition-all hover:bg-orange-600 active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {submitting ? 'Memproses...' : 'Ajukan Pengambilan (Gratis)'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
           </div>
         </div>
       </main>
-
-      {/* Bottom Action Bar (Mobile & Sticky) */}
-      <div className="fixed bottom-0 left-0 w-full z-[60] bg-surface/90 backdrop-blur-xl border-t border-outline-variant/30 px-6 py-4 flex items-center justify-between gap-4 md:px-12">
-        <div className="hidden md:block">
-          <span className="text-on-surface-variant font-label-md">Total Pesanan</span>
-          <p className="font-headline-md text-headline-md text-primary">Rp {(pricePerItem * quantity).toLocaleString('id-ID')}</p>
-        </div>
-        <div className="flex flex-1 md:flex-none gap-2">
-          <button onClick={handleAddToCart} className="flex-1 md:w-auto bg-surface-container-high text-on-surface py-4 px-4 md:px-8 rounded-2xl font-headline-sm text-headline-sm shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 border border-outline-variant">
-            <span className="material-symbols-outlined">add_shopping_cart</span>
-            <span className="hidden md:inline">Tambah Keranjang</span>
-          </button>
-          <Link to="/payment" className="flex-1 md:w-64 bg-primary text-on-primary py-4 px-4 md:px-8 rounded-2xl font-headline-sm text-headline-sm shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined">shopping_bag</span>
-            Pesan
-          </Link>
-        </div>
-      </div>
-
-      <footer className="w-full py-xl px-4 md:px-12 bg-surface-container-highest border-t border-outline-variant flex flex-col md:flex-row justify-between items-center gap-md mb-20 md:mb-0">
-        <div className="flex flex-col items-center md:items-start gap-2">
-          <span className="text-headline-md font-headline-md text-on-surface">ResFood Solo</span>
-          <p className="font-body-md text-body-md text-on-surface-variant">© 2024 ResFood Solo. Memberdayakan Ekonomi Sirkular.</p>
-        </div>
-        <div className="flex gap-6">
-          <Link to="#" className="font-label-lg text-label-lg text-on-surface-variant hover:text-primary hover:underline transition-all">Tentang Kami</Link>
-          <Link to="#" className="font-label-lg text-label-lg text-on-surface-variant hover:text-primary hover:underline transition-all">Hubungi Kami</Link>
-        </div>
-      </footer>
+      <MobileNav />
     </div>
   );
 }
