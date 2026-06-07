@@ -19,6 +19,14 @@ export function CartProvider({ children }) {
   }, [cart]);
 
   const addToCart = (item) => {
+    const savedUser = localStorage.getItem('user');
+    const currentUser = savedUser ? JSON.parse(savedUser) : null;
+    const ownerId = item.ownerId ?? item.penyediaId ?? item.penyedia?.id ?? null;
+
+    if (currentUser && ownerId !== null && String(ownerId) === String(currentUser.id)) {
+      return;
+    }
+
     setCart((prevCart) => {
       // Check if item already exists based on ID
       const existingItemIndex = prevCart.findIndex(i => i.id === item.id);

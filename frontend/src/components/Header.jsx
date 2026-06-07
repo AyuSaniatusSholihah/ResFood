@@ -6,7 +6,7 @@ const EMPTY_AVATAR = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/
 
 // Page title map for mobile app-style header
 const pageTitles = {
-  '/dashboard': 'TurahanSolo',
+  '/dashboard': 'Turahan Solo',
   '/katalog': 'Katalog Surplus',
   '/dampak': 'Dampak',
   '/impact': 'Impact',
@@ -27,7 +27,7 @@ const getPageTitle = (pathname) => {
   if (pageTitles[pathname]) return pageTitles[pathname];
   // Prefix match
   const match = Object.keys(pageTitles).find(k => pathname.startsWith(k) && k !== '/');
-  return match ? pageTitles[match] : 'TurahanSolo';
+  return match ? pageTitles[match] : 'Turahan Solo';
 };
 
 // Pages that show back button instead of logo (sub-pages)
@@ -94,7 +94,7 @@ export default function Header() {
                 </span>
               </div>
               <span className="font-black text-[17px]" style={{ color: '#1D9E75', letterSpacing: '-0.5px' }}>
-                TurahanSolo
+                Turahan Solo
               </span>
             </Link>
           )}
@@ -144,7 +144,7 @@ export default function Header() {
             <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1D9E75, #2EC4A0)' }}>
               <span className="material-symbols-outlined text-white text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>eco</span>
             </div>
-            TurahanSolo
+            Turahan Solo
           </Link>
           <nav className="flex items-center gap-8 ml-8">
             <Link to="/dashboard" className={`font-label-lg text-label-lg transition-colors ${location.pathname === '/dashboard' ? 'text-primary font-bold border-b-2 border-primary pb-1' : 'text-on-surface-variant hover:text-primary'}`}>Dashboard</Link>

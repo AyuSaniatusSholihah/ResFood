@@ -709,10 +709,82 @@ app.delete('/api/makanan/:id', authMiddleware, async (req, res) => {
 // POST /api/transaksi -> Membuat transaksi baru Jalur A (Menunggu Pembayaran)
 app.post('/api/transaksi', authMiddleware, async (req, res) => {
   try {
-    const { makananId, makanan_id, jumlah } = req.body;
+    const { items, metode, makananId, makanan_id, jumlah } = req.body;
+    const pemesanId = req.user.id;
+
+    // Handle bulk items from cart
+    if (items && Array.isArray(items)) {
+      const created = [];
+      for (const item of items) {
+        const targetMakananId = parseInt(item.id || item.makananId || item.makanan_id);
+        const targetJumlah = parseInt(item.quantity || item.jumlah);
+
+        if (!targetMakananId || isNaN(targetJumlah) || targetJumlah <= 0) {
+          return res.status(400).json({ message: 'Makanan ID dan jumlah yang valid wajib diisi!' });
+        }
+
+        const makanan = await prisma.makanan.findUnique({
+          where: { id: targetMakananId }
+        });
+
+        if (!makanan || makanan.status === 'DIHAPUS') {
+          return res.status(404).json({ message: `Makanan dengan ID ${targetMakananId} tidak ditemukan!` });
+        }
+
+        if (makanan.stok < targetJumlah) {
+          return res.status(400).json({ message: `Stok makanan "${makanan.nama}" tidak mencukupi!` });
+        }
+
+        const { jalur, hargaPlatform } = hitungJalurDanHarga(makanan.tglExpired, makanan.hargaAsli);
+        if (jalur !== 'A') {
+          return res.status(400).json({ message: `Makanan "${makanan.nama}" bukan makanan Jalur A!` });
+        }
+
+        if (makanan.penyediaId === pemesanId) {
+          return res.status(400).json({ message: `Anda tidak dapat memesan makanan Anda sendiri ("${makanan.nama}")!` });
+        }
+
+        const totalBayar = hargaPlatform * targetJumlah;
+
+        const transaksi = await prisma.transaksi.create({
+          data: {
+            makananId: targetMakananId,
+            pemesanId,
+            jumlah: targetJumlah,
+            totalBayar: totalBayar,
+            tipe: 'KONSUMSI',
+            status: 'MENUNGGU',
+            buktiBayar: null,
+            metode: metode || 'QRIS'
+          },
+          include: {
+            makanan: true
+          }
+        });
+
+        const mockPembayaran = {
+          id: transaksi.id,
+          transaksi_id: transaksi.id,
+          metode: transaksi.metode,
+          jumlah: transaksi.totalBayar,
+          status: 'pending'
+        };
+
+        created.push({
+          transaksi,
+          pembayaran: mockPembayaran
+        });
+      }
+
+      return res.status(201).json({
+        message: 'Transaksi berhasil dibuat, silakan upload bukti transfer!',
+        data: created
+      });
+    }
+
+    // Fallback: Handle single item
     const targetMakananId = parseInt(makananId || makanan_id);
     const targetJumlah = parseInt(jumlah);
-    const pemesanId = req.user.id;
 
     if (!targetMakananId || isNaN(targetJumlah) || targetJumlah <= 0) {
       return res.status(400).json({ message: 'Makanan ID dan jumlah yang valid wajib diisi!' });
@@ -743,8 +815,7 @@ app.post('/api/transaksi', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Anda tidak dapat memesan makanan Anda sendiri!' });
     }
 
-    // 5. Buat transaksi (Tipe: KONSUMSI, Status: MENUNGGU, totalBayar = hargaPlatform * jumlah)
-    // Catatan: Stok BELUM berkurang di tahap ini
+    // 5. Buat transaksi
     const totalBayar = hargaPlatform * targetJumlah;
 
     const transaksi = await prisma.transaksi.create({
@@ -755,14 +826,14 @@ app.post('/api/transaksi', authMiddleware, async (req, res) => {
         totalBayar: totalBayar,
         tipe: 'KONSUMSI',
         status: 'MENUNGGU',
-        buktiBayar: null
+        buktiBayar: null,
+        metode: metode || 'QRIS'
       },
       include: {
         makanan: true
       }
     });
 
-    // Mock Pembayaran object response untuk kompatibilitas frontend lama
     const mockPembayaran = {
       id: transaksi.id,
       transaksi_id: transaksi.id,
@@ -774,7 +845,7 @@ app.post('/api/transaksi', authMiddleware, async (req, res) => {
     res.status(201).json({
       message: 'Transaksi berhasil dibuat, silakan upload bukti transfer!',
       transaksi,
-      pembayaran: mockPembayaran // Untuk kompatibilitas frontend
+      pembayaran: mockPembayaran
     });
   } catch (error) {
     console.error('Create Transaksi Error:', error);
@@ -784,6 +855,63 @@ app.post('/api/transaksi', authMiddleware, async (req, res) => {
 
 // PATCH /api/transaksi/:id/bukti -> Upload bukti transfer pembayaran (mengisi Transaksi.buktiBayar)
 app.patch('/api/transaksi/:id/bukti', authMiddleware, upload.single('bukti'), async (req, res) => {
+  try {
+    const transaksiId = parseInt(req.params.id);
+    let buktiUrl = req.body.buktiBayar || req.body.bukti;
+    
+    if (req.file) {
+      buktiUrl = '/uploads/' + req.file.filename;
+    }
+
+    if (!buktiUrl) {
+      return res.status(400).json({ message: 'Bukti transfer berupa URL atau file wajib dilampirkan!' });
+    }
+
+    const transaksi = await prisma.transaksi.findUnique({
+      where: { id: transaksiId }
+    });
+
+    if (!transaksi) {
+      return res.status(404).json({ message: 'Transaksi tidak ditemukan!' });
+    }
+
+    // Validasi: harus pemesan
+    if (transaksi.pemesanId !== req.user.id) {
+      return res.status(403).json({ message: 'Akses ditolak. Anda bukan pemesan transaksi ini.' });
+    }
+
+    // Update field buktiBayar, status tetap MENUNGGU
+    const updatedTransaksi = await prisma.transaksi.update({
+      where: { id: transaksiId },
+      data: {
+        buktiBayar: buktiUrl
+      },
+      include: {
+        makanan: true
+      }
+    });
+
+    // Mock Pembayaran object response untuk kompatibilitas frontend lama
+    const mockPembayaran = {
+      id: updatedTransaksi.id,
+      transaksi_id: updatedTransaksi.id,
+      bukti_transfer: updatedTransaksi.buktiBayar,
+      status: 'menunggu'
+    };
+
+    res.json({
+      message: 'Bukti transfer berhasil diunggah, menunggu konfirmasi penyedia makanan!',
+      transaksi: updatedTransaksi,
+      pembayaran: mockPembayaran
+    });
+  } catch (error) {
+    console.error('Upload Bukti Error:', error);
+    res.status(500).json({ message: 'Gagal mengunggah bukti transfer' });
+  }
+});
+
+// POST /api/pembayaran/:id/bukti -> Upload bukti transfer pembayaran (mengisi Transaksi.buktiBayar) - alias untuk kompatibilitas frontend
+app.post('/api/pembayaran/:id/bukti', authMiddleware, upload.single('bukti'), async (req, res) => {
   try {
     const transaksiId = parseInt(req.params.id);
     let buktiUrl = req.body.buktiBayar || req.body.bukti;

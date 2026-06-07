@@ -164,8 +164,18 @@ export default function DashboardPage() {
   const handleAddToCart = (item, e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const ownerId = item.penyediaId ?? item.penyedia?.id ?? null;
+    const isOwnProduct = currentUser && ownerId !== null && String(ownerId) === String(currentUser.id);
+
+    if (isOwnProduct) {
+      alert('Produk milik sendiri tidak bisa dimasukkan ke keranjang.');
+      return;
+    }
+
     addToCart({
       id: item.id,
+      ownerId,
       name: item.nama,
       seller: item.penyedia?.nama || 'TurahanSolo',
       price: item.hargaPlatform ?? item.harga_platform ?? 0,
@@ -381,6 +391,8 @@ export default function DashboardPage() {
                 const origPrice = item.hargaAsli ?? item.harga_asli ?? 0;
                 const hasDiscount = price < origPrice && origPrice > 0;
                 const cfg = jalurConfig[item.jalur] || jalurConfig['A'];
+                const ownerId = item.penyediaId ?? item.penyedia?.id ?? null;
+                const isOwnProduct = currentUser && ownerId !== null && String(ownerId) === String(currentUser.id);
                 return (
                   <Link
                     key={item.id}
@@ -445,10 +457,16 @@ export default function DashboardPage() {
                       {/* Action */}
                       <button
                         onClick={(e) => handleAddToCart(item, e)}
+                        disabled={isOwnProduct}
                         className="mt-2 w-full py-2 rounded-xl text-[10px] font-black text-white transition-all active:scale-95"
-                        style={{ background: `linear-gradient(135deg, ${cfg.color}, ${cfg.color}CC)` }}
+                        style={{
+                          background: isOwnProduct
+                            ? '#D1D5DB'
+                            : `linear-gradient(135deg, ${cfg.color}, ${cfg.color}CC)`,
+                          cursor: isOwnProduct ? 'not-allowed' : 'pointer',
+                        }}
                       >
-                        + Keranjang
+                        {isOwnProduct ? 'Produk Sendiri' : '+ Keranjang'}
                       </button>
                     </div>
                   </Link>

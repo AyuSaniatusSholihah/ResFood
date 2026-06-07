@@ -41,7 +41,7 @@ export default function LoginPage() {
       }
 
       setSuccessMsg('Login berhasil! Mengarahkan...');
-      
+
       // Simpan session ke AuthContext
       login(data.token, data.user);
 
@@ -60,13 +60,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-gray-50 px-6 py-12 font-sans md:bg-[#1D9E75]/5">
+    <div
+      className="flex min-h-screen flex-col justify-center bg-cover bg-center bg-no-repeat px-6 py-12 font-sans relative"
+      style={{
+        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('/cou.png')`
+      }}
+    >
       {/* Card Wrapper */}
       <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-8 shadow-md border border-gray-100">
-        
+
         {/* Header/Brand logo */}
         <div className="text-center">
-          <h2 className="text-3xl font-extrabold tracking-tight text-[#1D9E75]">TurahanSolo</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight text-[#1D9E75]">Turahan Solo</h2>
           <p className="mt-2 text-sm text-gray-500">Masuk ke akun Anda untuk berkontribusi mengelola surplus pangan.</p>
         </div>
 
